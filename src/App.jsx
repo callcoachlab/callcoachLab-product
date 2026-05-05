@@ -8,26 +8,20 @@ import { SettingsPage } from './pages/SettingsPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { DashboardLayout } from './components/DashboardLayout';
 import { Toast } from './components/Toast';
-import { useAuthStore } from './store/authStore';
 import './App.css';
 import CallCoach360Setup from './ui/Setup';
 
 function App() {
-  const { isAuthenticated } = useAuthStore();
+  // Auth gating is temporarily disabled for now.
+  // const { isAuthenticated } = useAuthStore();
 
   return (
     <BrowserRouter>
       <Toast />
       <Routes>
         {/* Public Routes */}
-        <Route 
-          path="/login" 
-          element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage />} 
-        />
-        <Route 
-          path="/signup" 
-          element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <SignupPage />} 
-        />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
 
         <Route
           path='/setup'
@@ -35,22 +29,16 @@ function App() {
         />
 
         {/* Protected Routes */}
-        <Route element={<ProtectedRoute />}>
+        {/* <Route element={<ProtectedRoute />}> */}
           <Route path="/dashboard" element={<DashboardLayout><DashboardPage /></DashboardLayout>} />
           <Route path="/teams" element={<DashboardLayout><TeamsPage /></DashboardLayout>} />
           <Route path="/users" element={<DashboardLayout><UsersPage /></DashboardLayout>} />
           <Route path="/settings" element={<DashboardLayout><SettingsPage /></DashboardLayout>} />
-        </Route>
+        {/* </Route> */}
 
         {/* Default redirect */}
-        <Route 
-          path="/" 
-          element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />} 
-        />
-        <Route 
-          path="*" 
-          element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />} 
-        />
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>
   );
