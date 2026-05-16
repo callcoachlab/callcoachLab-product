@@ -1,16 +1,20 @@
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '../store/authStore';
-import { Card, CardHeader, CardTitle, CardContent } from '../components/Card';
+import { healthService } from '../services/healthService';
 
 export function DashboardPage() {
   const { user, workspace, fetchWorkspace } = useAuthStore();
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [currentDate] = useState(new Date());
+  const [apiHealth, setApiHealth] = useState(null);
 
   useEffect(() => {
     // Fetch the current workspace on component mount
     fetchWorkspace().catch((error) => {
       console.error('Failed to fetch workspace:', error);
     });
+    healthService.checkHealth()
+      .then(setApiHealth)
+      .catch(() => setApiHealth({ status: 'offline' }));
   }, [fetchWorkspace]);
 
   // These will come from backend API calls in the future
@@ -31,15 +35,6 @@ export function DashboardPage() {
   // Client performance data will come from API  
   const clientData = workspace?.clientPerformance || [];
 
-  const formatDate = (date) => {
-    return date.toLocaleDateString('en-US', { 
-      weekday: 'long',
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    });
-  };
-
   const formatDateShort = (date) => {
     return date.toLocaleDateString('en-US', { 
       month: 'short', 
@@ -53,9 +48,14 @@ export function DashboardPage() {
       <div className="flex-1 p-6">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            Good morning, {user?.name || 'User'}!
-          </h1>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <h1 className="text-4xl font-bold text-gray-900 mb-2">
+              Good morning, {user?.name || 'User'}!
+            </h1>
+            <div className={`rounded-lg border px-3 py-2 text-sm ${apiHealth?.status === 'offline' ? 'border-red-200 bg-red-50 text-red-700' : 'border-green-200 bg-green-50 text-green-700'}`}>
+              API {apiHealth?.status === 'offline' ? 'Offline' : 'Healthy'}
+            </div>
+          </div>
           <p className="text-gray-600">
             Call Coach 360° wishes you a good and productive day. <span className="text-blue-600 font-semibold">{dashboardStats.todaysCallsWaiting} calls</span> waiting for you today. You also have <span className="text-blue-600 font-semibold">{dashboardStats.bookedCalls} booked calls</span> in your calendar today.
           </p>

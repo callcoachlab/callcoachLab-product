@@ -40,6 +40,24 @@ export const authService = {
     return { user, workspace };
   },
 
+  // Register an email/password account
+  async register(email, password) {
+    const response = await api.post(API_ENDPOINTS.REGISTER, { email, password });
+    return response.data.data;
+  },
+
+  // Request forgot password email
+  async forgotPassword(email) {
+    const response = await api.post(API_ENDPOINTS.FORGOT_PASSWORD, { email });
+    return response.data.data;
+  },
+
+  // Reset password with token
+  async resetPassword(token, password) {
+    const response = await api.post(API_ENDPOINTS.RESET_PASSWORD, { token, password });
+    return response.data.data;
+  },
+
   // Get current user
   async getMe() {
     const response = await api.get(API_ENDPOINTS.GET_ME);
@@ -47,8 +65,8 @@ export const authService = {
   },
 
   // Accept invite
-  async acceptInvite(token, password) {
-    const response = await api.post(API_ENDPOINTS.ACCEPT_INVITE, { token, password });
+  async acceptInvite(token, password, name) {
+    const response = await api.post(API_ENDPOINTS.ACCEPT_INVITE, { token, password, name });
     const { user, workspace, auth } = response.data.data;
     
     // Store token and user data

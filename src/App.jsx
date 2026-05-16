@@ -5,7 +5,9 @@ import { DashboardPage } from './pages/DashboardPage';
 import { TeamsPage } from './pages/TeamsPage';
 import { UsersPage } from './pages/UsersPage';
 import { SettingsPage } from './pages/SettingsPage';
-import { ProtectedRoute } from './components/ProtectedRoute';
+import { InvitesPage } from './pages/InvitesPage';
+import { AuditLogsPage } from './pages/AuditLogsPage';
+import { ScorecardsPage } from './pages/ScorecardsPage';
 import { DashboardLayout } from './components/DashboardLayout';
 import { Toast } from './components/Toast';
 import './App.css';
@@ -33,6 +35,9 @@ function App() {
           <Route path="/dashboard" element={<DashboardLayout><DashboardPage /></DashboardLayout>} />
           <Route path="/teams" element={<DashboardLayout><TeamsPage /></DashboardLayout>} />
           <Route path="/users" element={<DashboardLayout><UsersPage /></DashboardLayout>} />
+          <Route path="/invites" element={<DashboardLayout><InvitesPage /></DashboardLayout>} />
+          <Route path="/scorecards" element={<DashboardLayout><ScorecardsPage /></DashboardLayout>} />
+          <Route path="/audit-logs" element={<DashboardLayout><AuditLogsPage /></DashboardLayout>} />
           <Route path="/settings" element={<DashboardLayout><SettingsPage /></DashboardLayout>} />
         {/* </Route> */}
 

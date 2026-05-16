@@ -14,9 +14,15 @@ export const userService = {
     return response.data.data;
   },
 
-  // Delete user
-  async deleteUser(userId) {
-    const response = await api.delete(`${API_ENDPOINTS.DELETE_USER}/${userId}`);
-    return response.data;
+  // Disable user
+  async disableUser(userId) {
+    const response = await api.post(`${API_ENDPOINTS.DISABLE_USER}/${userId}/disable`);
+    return response.data.data;
+  },
+
+  // Enable user
+  async enableUser(userId) {
+    const response = await api.post(`${API_ENDPOINTS.ENABLE_USER}/${userId}/enable`);
+    return response.data.data;
   },
 };

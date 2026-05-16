@@ -12,11 +12,12 @@ export function SettingsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [workspace, setWorkspace] = useState(null);
+  const [workspaceForm, setWorkspaceForm] = useState({ name: '', timezone: '', languagesEnabled: '' });
   
   const { user } = useAuthStore();
   const toast = useToast();
 
-  const canEditSettings = user?.role === 'ADMIN';
+  const canEditSettings = !user || user?.role === 'ADMIN';
 
   useEffect(() => {
     fetchData();
@@ -29,9 +30,15 @@ export function SettingsPage() {
         workspaceService.getMyWorkspace(),
         workspaceService.getSettings(),
       ]);
-      setWorkspace(workspaceData.workspace);
-      setSettings(settingsData.settings);
-    } catch (error) {
+      const workspacePayload = workspaceData.workspace || workspaceData;
+      setWorkspace(workspacePayload);
+      setWorkspaceForm({
+        name: workspacePayload?.name || '',
+        timezone: workspacePayload?.timezone || '',
+        languagesEnabled: (workspacePayload?.languagesEnabled || []).join(', '),
+      });
+      setSettings(settingsData.settings || settingsData);
+    } catch {
       toast.error('Failed to load settings');
     } finally {
       setIsLoading(false);
@@ -57,6 +64,27 @@ export function SettingsPage() {
       toast.success('Settings saved successfully');
     } catch (error) {
       toast.error(error.response?.data?.error?.message || 'Failed to save settings');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleWorkspaceSave = async () => {
+    try {
+      setIsSaving(true);
+      const payload = {
+        name: workspaceForm.name,
+        timezone: workspaceForm.timezone,
+        languagesEnabled: workspaceForm.languagesEnabled
+          .split(',')
+          .map((language) => language.trim())
+          .filter(Boolean),
+      };
+      const response = await workspaceService.updateWorkspace(payload);
+      setWorkspace(response.workspace || response);
+      toast.success('Workspace updated successfully');
+    } catch (error) {
+      toast.error(error.response?.data?.error?.message || 'Failed to update workspace');
     } finally {
       setIsSaving(false);
     }
@@ -93,8 +121,9 @@ export function SettingsPage() {
           <div className="space-y-4">
             <Input
               label="Workspace Name"
-              value={workspace?.name || ''}
-              disabled
+              value={workspaceForm.name}
+              onChange={(event) => setWorkspaceForm({ ...workspaceForm, name: event.target.value })}
+              disabled={!canEditSettings}
               fullWidth
             />
             <Input
@@ -105,10 +134,24 @@ export function SettingsPage() {
             />
             <Input
               label="Timezone"
-              value={workspace?.timezone || ''}
-              disabled
+              value={workspaceForm.timezone}
+              onChange={(event) => setWorkspaceForm({ ...workspaceForm, timezone: event.target.value })}
+              disabled={!canEditSettings}
               fullWidth
             />
+            <Input
+              label="Languages Enabled"
+              value={workspaceForm.languagesEnabled}
+              onChange={(event) => setWorkspaceForm({ ...workspaceForm, languagesEnabled: event.target.value })}
+              disabled={!canEditSettings}
+              helperText="Comma-separated language codes, for example en, hi"
+              fullWidth
+            />
+            {canEditSettings && (
+              <Button onClick={handleWorkspaceSave} loading={isSaving} disabled={isSaving}>
+                Save Workspace
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
