@@ -1,20 +1,33 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { userService } from '../services/userService';
+import { teamService } from '../services/teamService';
 import { Button } from '../components/Button';
-import { Card, CardHeader, CardTitle, CardContent } from '../components/Card';
+import { Card } from '../components/Card';
+import { Modal } from '../components/Modal';
 import { useToast } from '../components/Toast';
 import { Spinner } from '../components/Spinner';
 import { useAuthStore } from '../store/authStore';
 
+const listFromResponse = (response, key) => {
+  if (Array.isArray(response)) return response;
+  if (Array.isArray(response?.[key])) return response[key];
+  if (Array.isArray(response?.data)) return response.data;
+  return [];
+};
+
 export function UsersPage() {
   const [users, setUsers] = useState([]);
+  const [teams, setTeams] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [showInviteDialog, setShowInviteDialog] = useState(false);
-  
+  const [editingUser, setEditingUser] = useState(null);
+  const [formData, setFormData] = useState({ role: 'AGENT', status: 'ACTIVE', teamIds: [] });
+
   const { user: currentUser } = useAuthStore();
+  const navigate = useNavigate();
   const toast = useToast();
 
-  const canManageUsers = ['ADMIN'].includes(currentUser?.role);
+  const canManageUsers = !currentUser || ['ADMIN'].includes(currentUser?.role);
 
   useEffect(() => {
     fetchUsers();
@@ -23,21 +36,68 @@ export function UsersPage() {
   const fetchUsers = async () => {
     try {
       setIsLoading(true);
-      const data = await userService.getUsers();
-      setUsers(data.users || []);
+      const [usersData, teamsData] = await Promise.all([
+        userService.getUsers(),
+        teamService.getTeams({ limit: 100 }),
+      ]);
+      setUsers(listFromResponse(usersData, 'users'));
+      setTeams(listFromResponse(teamsData, 'teams'));
     } catch (error) {
-      toast.error('Failed to load users');
+      toast.error(error.response?.data?.error?.message || 'Failed to load users');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleInviteUser = () => {
-    setShowInviteDialog(true);
+  const handleOpenEdit = (user) => {
+    setEditingUser(user);
+    setFormData({
+      role: user.role || 'AGENT',
+      status: user.status || 'ACTIVE',
+      teamIds: user.teamIds || [],
+    });
   };
 
-  const handleCloseDialog = () => {
-    setShowInviteDialog(false);
+  const handleCloseEdit = () => {
+    setEditingUser(null);
+    setFormData({ role: 'AGENT', status: 'ACTIVE', teamIds: [] });
+  };
+
+  const toggleTeam = (teamId) => {
+    setFormData((current) => ({
+      ...current,
+      teamIds: current.teamIds.includes(teamId)
+        ? current.teamIds.filter((id) => id !== teamId)
+        : [...current.teamIds, teamId],
+    }));
+  };
+
+  const handleUpdateUser = async (event) => {
+    event.preventDefault();
+    try {
+      await userService.updateUser(editingUser._id || editingUser.id, formData);
+      toast.success('User updated successfully');
+      handleCloseEdit();
+      fetchUsers();
+    } catch (error) {
+      toast.error(error.response?.data?.error?.message || 'Failed to update user');
+    }
+  };
+
+  const handleStatusAction = async (user) => {
+    const userId = user._id || user.id;
+    try {
+      if (user.status === 'ACTIVE') {
+        await userService.disableUser(userId);
+        toast.success('User disabled');
+      } else {
+        await userService.enableUser(userId);
+        toast.success('User enabled');
+      }
+      fetchUsers();
+    } catch (error) {
+      toast.error(error.response?.data?.error?.message || 'Status update failed');
+    }
   };
 
   const getRoleBadgeColor = (role) => {
@@ -60,7 +120,7 @@ export function UsersPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="flex h-64 items-center justify-center">
         <Spinner size="lg" className="text-blue-600" />
       </div>
     );
@@ -68,137 +128,141 @@ export function UsersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-3xl font-bold text-gray-900">Users</h2>
-          <p className="text-gray-600 mt-1">Manage workspace users</p>
+          <p className="mt-1 text-gray-600">Manage workspace users, roles, teams, and account access</p>
         </div>
         {canManageUsers && (
-          <Button onClick={handleInviteUser}>
-            + Invite User
+          <Button onClick={() => navigate('/invites')}>
+            Manage Invites
           </Button>
         )}
       </div>
 
-      {users.length === 0 ? (
-        <Card>
-          <div className="text-center py-12">
-            <p className="text-gray-500 text-lg mb-4">No users found</p>
-          </div>
-        </Card>
-      ) : (
-        <Card padding={false}>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    User
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Role
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Teams
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Last Login
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {users.map((user) => (
-                  <tr key={user._id}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">{user.name}</div>
-                        <div className="text-sm text-gray-500">{user.email}</div>
+      <Card padding={false}>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-500">User</th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-500">Role</th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-500">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-500">Teams</th>
+                <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-500">Last Login</th>
+                {canManageUsers && (
+                  <th className="px-6 py-3 text-right text-xs font-medium uppercase text-gray-500">Actions</th>
+                )}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 bg-white">
+              {users.map((user) => (
+                <tr key={user._id || user.id}>
+                  <td className="whitespace-nowrap px-6 py-4">
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">{user.name || 'Unnamed user'}</div>
+                      <div className="text-sm text-gray-500">{user.email}</div>
+                    </div>
+                  </td>
+                  <td className="whitespace-nowrap px-6 py-4">
+                    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${getRoleBadgeColor(user.role)}`}>
+                      {user.role || 'N/A'}
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap px-6 py-4">
+                    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${getStatusBadgeColor(user.status)}`}>
+                      {user.status || 'N/A'}
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                    {user.teamIds?.length || 0} teams
+                  </td>
+                  <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                    {user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleDateString() : 'Never'}
+                  </td>
+                  {canManageUsers && (
+                    <td className="whitespace-nowrap px-6 py-4 text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button size="sm" variant="outline" onClick={() => handleOpenEdit(user)}>
+                          Edit
+                        </Button>
+                        <Button size="sm" variant={user.status === 'ACTIVE' ? 'danger' : 'secondary'} onClick={() => handleStatusAction(user)}>
+                          {user.status === 'ACTIVE' ? 'Disable' : 'Enable'}
+                        </Button>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleBadgeColor(user.role)}`}>
-                        {user.role}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeColor(user.status)}`}>
-                        {user.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {user.teamIds?.length || 0} teams
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleDateString() : 'Never'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
-
-      {/* Invite User Dialog */}
-      {showInviteDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Invite User</h3>
-              <button
-                onClick={handleCloseDialog}
-                className="text-gray-400 hover:text-gray-500"
-              >
-                <span className="sr-only">Close</span>
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            
-            <form className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="user@example.com"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Role
-                </label>
-                <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="AGENT">Agent</option>
-                  <option value="MANAGER">Manager</option>
-                  <option value="ADMIN">Admin</option>
-                </select>
-              </div>
-              
-              <div className="flex gap-3 pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="flex-1"
-                  onClick={handleCloseDialog}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" className="flex-1">
-                  Send Invite
-                </Button>
-              </div>
-            </form>
-          </div>
+                  )}
+                </tr>
+              ))}
+              {users.length === 0 && (
+                <tr>
+                  <td colSpan={canManageUsers ? 6 : 5} className="px-6 py-12 text-center text-gray-500">
+                    No users found
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
-      )}
+      </Card>
+
+      <Modal isOpen={Boolean(editingUser)} onClose={handleCloseEdit} title="Edit User" size="lg">
+        <form onSubmit={handleUpdateUser} className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Role</label>
+              <select
+                value={formData.role}
+                onChange={(event) => setFormData({ ...formData, role: event.target.value })}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="AGENT">Agent</option>
+                <option value="MANAGER">Manager</option>
+                <option value="ADMIN">Admin</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Status</label>
+              <select
+                value={formData.status}
+                onChange={(event) => setFormData({ ...formData, status: event.target.value })}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="ACTIVE">Active</option>
+                <option value="INACTIVE">Inactive</option>
+                <option value="SUSPENDED">Suspended</option>
+              </select>
+            </div>
+          </div>
+
+          {teams.length > 0 && (
+            <div>
+              <p className="mb-2 text-sm font-medium text-gray-700">Teams</p>
+              <div className="flex flex-wrap gap-2">
+                {teams.map((team) => {
+                  const teamId = team._id || team.id;
+                  const selected = formData.teamIds.includes(teamId);
+                  return (
+                    <button
+                      key={teamId}
+                      type="button"
+                      onClick={() => toggleTeam(teamId)}
+                      className={`rounded-lg border px-3 py-1.5 text-sm ${selected ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-300 text-gray-700'}`}
+                    >
+                      {team.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={handleCloseEdit}>Cancel</Button>
+            <Button type="submit">Save User</Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

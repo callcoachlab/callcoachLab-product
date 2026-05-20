@@ -61,7 +61,13 @@ export function SignupPage() {
     if (!validate()) return;
 
     try {
-      const { confirmPassword, ...dataToSend } = formData;
+      const dataToSend = {
+        workspaceName: formData.workspaceName,
+        adminEmail: formData.adminEmail,
+        adminPassword: formData.adminPassword,
+        industryType: formData.industryType,
+        timezone: formData.timezone,
+      };
       await createWorkspace(dataToSend);
       toast.success('Workspace created successfully!');
       navigate('/dashboard');

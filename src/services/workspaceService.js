@@ -10,7 +10,14 @@ export const workspaceService = {
 
   // Update workspace settings
   async updateSettings(settings) {
-    const response = await api.patch(API_ENDPOINTS.UPDATE_SETTINGS, settings);
+    const payload = settings.permissions || settings;
+    const response = await api.patch(API_ENDPOINTS.UPDATE_SETTINGS, payload);
+    return response.data.data;
+  },
+
+  // Update workspace profile
+  async updateWorkspace(data) {
+    const response = await api.patch(API_ENDPOINTS.UPDATE_MY_WORKSPACE, data);
     return response.data.data;
   },
 

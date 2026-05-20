@@ -13,13 +13,13 @@ export function TeamsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTeam, setEditingTeam] = useState(null);
-  const [formData, setFormData] = useState({ name: '' });
+  const [formData, setFormData] = useState({ name: '', description: '' });
   const [errors, setErrors] = useState({});
   
   const { user } = useAuthStore();
   const toast = useToast();
 
-  const canManageTeams = ['ADMIN', 'MANAGER'].includes(user?.role);
+  const canManageTeams = !user || ['ADMIN', 'MANAGER'].includes(user?.role);
 
   useEffect(() => {
     fetchTeams();
@@ -48,10 +48,10 @@ export function TeamsPage() {
   const handleOpenModal = (team = null) => {
     if (team) {
       setEditingTeam(team);
-      setFormData({ name: team.name });
+      setFormData({ name: team.name, description: team.description || '' });
     } else {
       setEditingTeam(null);
-      setFormData({ name: '' });
+      setFormData({ name: '', description: '' });
     }
     setIsModalOpen(true);
     setErrors({});
@@ -60,7 +60,7 @@ export function TeamsPage() {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingTeam(null);
-    setFormData({ name: '' });
+    setFormData({ name: '', description: '' });
     setErrors({});
   };
 
@@ -156,6 +156,9 @@ export function TeamsPage() {
                     <span className="text-gray-600">Manager:</span>
                     <span className="font-medium">{team.managerName || 'N/A'}</span>
                   </div>
+                  {team.description && (
+                    <p className="pt-2 text-sm text-gray-600">{team.description}</p>
+                  )}
                 </div>
                 
                 {canManageTeams && (
@@ -201,6 +204,14 @@ export function TeamsPage() {
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             error={errors.name}
             placeholder="Sales Team"
+          />
+
+          <Input
+            label="Description"
+            fullWidth
+            value={formData.description}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            placeholder="testing purpose"
           />
 
           <div className="flex gap-2 justify-end">
