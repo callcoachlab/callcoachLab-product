@@ -5,6 +5,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { TeamsPage } from './pages/TeamsPage';
 import { UsersPage } from './pages/UsersPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { CreateScorecardPage } from './pages/ScoreCard';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { DashboardLayout } from './components/DashboardLayout';
 import { Toast } from './components/Toast';
@@ -34,6 +35,7 @@ function App() {
           <Route path="/teams" element={<DashboardLayout><TeamsPage /></DashboardLayout>} />
           <Route path="/users" element={<DashboardLayout><UsersPage /></DashboardLayout>} />
           <Route path="/settings" element={<DashboardLayout><SettingsPage /></DashboardLayout>} />
+          <Route path="/scorecards/new" element={<CreateScorecardPage />} />
         {/* </Route> */}
 
         {/* Default redirect */}
