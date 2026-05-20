@@ -5,6 +5,8 @@ import { DashboardPage } from './pages/DashboardPage';
 import { TeamsPage } from './pages/TeamsPage';
 import { UsersPage } from './pages/UsersPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { CreateScorecardPage } from './pages/ScoreCard';
+import { ProtectedRoute } from './components/ProtectedRoute';
 import { InvitesPage } from './pages/InvitesPage';
 import { AuditLogsPage } from './pages/AuditLogsPage';
 import { ScorecardsPage } from './pages/ScorecardsPage';
@@ -39,6 +41,7 @@ function App() {
           <Route path="/scorecards" element={<DashboardLayout><ScorecardsPage /></DashboardLayout>} />
           <Route path="/audit-logs" element={<DashboardLayout><AuditLogsPage /></DashboardLayout>} />
           <Route path="/settings" element={<DashboardLayout><SettingsPage /></DashboardLayout>} />
+          <Route path="/scorecards/new" element={<CreateScorecardPage />} />
         {/* </Route> */}
       </Routes>
     </BrowserRouter>
