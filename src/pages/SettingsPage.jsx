@@ -100,7 +100,9 @@ export function SettingsPage() {
 
   const permissions = [
     { key: 'managersCanEditScorecards', label: 'Managers can edit scorecards', description: 'Allow managers to create and modify scorecards' },
+    { key: 'managersCanPublishScorecards', label: 'Managers can publish scorecards', description: 'Allow managers to publish scorecard versions' },
     { key: 'managersCanEditOutcomes', label: 'Managers can edit outcomes', description: 'Allow managers to create and modify call outcomes' },
+    { key: 'managersCanManageIntegrations', label: 'Managers can manage integrations', description: 'Allow managers to configure call integrations' },
     { key: 'managersCanExportData', label: 'Managers can export data', description: 'Allow managers to export reports and data' },
     { key: 'agentsCanViewOwnCallScores', label: 'Agents can view their own scores', description: 'Allow agents to see their individual call scores' },
   ];

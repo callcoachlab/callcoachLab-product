@@ -199,7 +199,6 @@ export function InvitesPage() {
                   >
                     <option value="AGENT">Agent</option>
                     <option value="MANAGER">Manager</option>
-                    <option value="ADMIN">Admin</option>
                   </select>
                 </div>
               </div>

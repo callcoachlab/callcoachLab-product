@@ -8,6 +8,7 @@ import { SettingsPage } from './pages/SettingsPage';
 import { InvitesPage } from './pages/InvitesPage';
 import { AuditLogsPage } from './pages/AuditLogsPage';
 import { ScorecardsPage } from './pages/ScorecardsPage';
+import { VerifyEmailPage } from './pages/VerifyEmailPage';
 import { DashboardLayout } from './components/DashboardLayout';
 import { Toast } from './components/Toast';
 import './App.css';
@@ -21,9 +22,12 @@ function App() {
     <BrowserRouter>
       <Toast />
       <Routes>
+        <Route path="/" element={<Navigate to="/login" replace />} />
+
         {/* Public Routes */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
 
         <Route
           path='/setup'

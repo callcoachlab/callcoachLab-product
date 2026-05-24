@@ -5,10 +5,17 @@ export const authService = {
   // Login
   async login(email, password) {
     const response = await api.post(API_ENDPOINTS.LOGIN, { email, password });
-    const { user, workspace, auth } = response.data.data;
+    const { user, workspace, auth, setupToken, nextStep } = response.data.data;
+
+    if (setupToken) {
+      localStorage.setItem('setupToken', setupToken);
+      if (user) localStorage.setItem('user', JSON.stringify(user));
+      return { user, workspace: null, setupToken, nextStep };
+    }
     
     // Store token and user data
     localStorage.setItem('accessToken', auth.accessToken);
+    localStorage.removeItem('setupToken');
     localStorage.setItem('user', JSON.stringify(user));
     localStorage.setItem('workspace', JSON.stringify(workspace));
     
@@ -22,6 +29,7 @@ export const authService = {
     } finally {
       // Clear local storage regardless of API response
       localStorage.removeItem('accessToken');
+      localStorage.removeItem('setupToken');
       localStorage.removeItem('user');
       localStorage.removeItem('workspace');
     }
@@ -34,6 +42,7 @@ export const authService = {
     
     // Store token and user data
     localStorage.setItem('accessToken', auth.accessToken);
+    localStorage.removeItem('setupToken');
     localStorage.setItem('user', JSON.stringify(user));
     localStorage.setItem('workspace', JSON.stringify(workspace));
     
@@ -43,6 +52,23 @@ export const authService = {
   // Register an email/password account
   async register(email, password) {
     const response = await api.post(API_ENDPOINTS.REGISTER, { email, password });
+    return response.data.data;
+  },
+
+  async verifyEmail(token) {
+    const response = await api.post(API_ENDPOINTS.VERIFY_EMAIL, { token });
+    const data = response.data.data;
+    if (data.setupToken) {
+      localStorage.setItem('setupToken', data.setupToken);
+    }
+    if (data.user) {
+      localStorage.setItem('user', JSON.stringify(data.user));
+    }
+    return data;
+  },
+
+  async resendVerification(email) {
+    const response = await api.post(API_ENDPOINTS.RESEND_VERIFICATION, { email });
     return response.data.data;
   },
 
@@ -71,6 +97,7 @@ export const authService = {
     
     // Store token and user data
     localStorage.setItem('accessToken', auth.accessToken);
+    localStorage.removeItem('setupToken');
     localStorage.setItem('user', JSON.stringify(user));
     localStorage.setItem('workspace', JSON.stringify(workspace));
     

@@ -30,7 +30,7 @@ export function TeamsPage() {
       setIsLoading(true);
       const response = await teamService.getTeams();
       // Check if response is already the data array or has nested structure
-      const teamsList = Array.isArray(response) ? response : (response.data || []);
+      const teamsList = Array.isArray(response) ? response : (response.teams || response.data || []);
       // Normalize id to _id for consistency
       const normalizedTeams = teamsList.map(team => ({
         ...team,

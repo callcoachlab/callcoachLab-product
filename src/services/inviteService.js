@@ -12,6 +12,11 @@ export const inviteService = {
     return response.data.data;
   },
 
+  async previewInvite(token) {
+    const response = await api.get(API_ENDPOINTS.PREVIEW_INVITE, { params: { token } });
+    return response.data.data;
+  },
+
   async resendInvite(inviteId) {
     const response = await api.post(`${API_ENDPOINTS.RESEND_INVITE}/${inviteId}/resend`);
     return response.data.data;

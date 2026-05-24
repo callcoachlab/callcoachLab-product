@@ -38,7 +38,12 @@ export function LoginPage() {
     if (!validate()) return;
 
     try {
-      await login(email, password);
+      const result = await login(email, password);
+      if (!result.workspace) {
+        toast.success('Email verified. Finish workspace setup.');
+        navigate('/setup');
+        return;
+      }
       toast.success('Login successful!');
       navigate('/dashboard');
     } catch (error) {
@@ -134,7 +139,7 @@ export function LoginPage() {
                 <a href="#" className="text-gray-700 hover:underline">Terms of Service</a>
               </p>
               <p className="mt-3 text-sm text-gray-600">
-                Already have an account?{' '}
+                New here?{' '}
                 <Link to="/signup" className="text-blue-600 hover:underline font-medium">
                   Sign up
                 </Link>

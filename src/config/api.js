@@ -1,4 +1,4 @@
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000').replace(/\/+$/, '');
 export const APP_NAME = import.meta.env.VITE_APP_NAME || 'CoachLab';
 
 export const API_ENDPOINTS = {
@@ -7,6 +7,8 @@ export const API_ENDPOINTS = {
   LOGOUT: '/auth/logout',
   REFRESH: '/auth/refresh',
   ACCEPT_INVITE: '/auth/accept-invite',
+  VERIFY_EMAIL: '/auth/verify-email',
+  RESEND_VERIFICATION: '/auth/resend-verification',
   REGISTER: '/auth/register',
   FORGOT_PASSWORD: '/auth/forgot-password',
   RESET_PASSWORD: '/auth/reset-password',
@@ -34,6 +36,7 @@ export const API_ENDPOINTS = {
   // Invites
   CREATE_INVITE: '/invites',
   GET_INVITES: '/invites',
+  PREVIEW_INVITE: '/invites/preview',
   RESEND_INVITE: '/invites',
   REVOKE_INVITE: '/invites',
   

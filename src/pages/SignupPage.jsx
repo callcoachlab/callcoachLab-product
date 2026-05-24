@@ -1,44 +1,37 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useToast } from '../components/Toast';
 import authImage from '../assets/auth.png';
 
 export function SignupPage() {
   const [formData, setFormData] = useState({
-    workspaceName: '',
-    adminEmail: '',
-    adminPassword: '',
+    email: '',
+    password: '',
     confirmPassword: '',
-    industryType: 'Dental',
-    timezone: 'America/New_York',
   });
   const [errors, setErrors] = useState({});
+  const [registeredEmail, setRegisteredEmail] = useState('');
   
-  const { createWorkspace, isLoading } = useAuthStore();
-  const navigate = useNavigate();
+  const { register, isLoading } = useAuthStore();
   const toast = useToast();
 
   const validate = () => {
     const newErrors = {};
     
-    if (!formData.workspaceName) {
-      newErrors.workspaceName = 'Workspace name is required';
+    if (!formData.email) {
+      newErrors.email = 'Email is required';
+    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+      newErrors.email = 'Email is invalid';
     }
     
-    if (!formData.adminEmail) {
-      newErrors.adminEmail = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(formData.adminEmail)) {
-      newErrors.adminEmail = 'Email is invalid';
+    if (!formData.password) {
+      newErrors.password = 'Password is required';
+    } else if (formData.password.length < 8) {
+      newErrors.password = 'Password must be at least 8 characters';
     }
     
-    if (!formData.adminPassword) {
-      newErrors.adminPassword = 'Password is required';
-    } else if (formData.adminPassword.length < 8) {
-      newErrors.adminPassword = 'Password must be at least 8 characters';
-    }
-    
-    if (formData.adminPassword !== formData.confirmPassword) {
+    if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
     }
     
@@ -61,20 +54,30 @@ export function SignupPage() {
     if (!validate()) return;
 
     try {
-      const dataToSend = {
-        workspaceName: formData.workspaceName,
-        adminEmail: formData.adminEmail,
-        adminPassword: formData.adminPassword,
-        industryType: formData.industryType,
-        timezone: formData.timezone,
-      };
-      await createWorkspace(dataToSend);
-      toast.success('Workspace created successfully!');
-      navigate('/dashboard');
+      await register(formData.email, formData.password);
+      setRegisteredEmail(formData.email);
+      toast.success('Check your email for the verification link.');
     } catch (error) {
-      toast.error(error.response?.data?.error?.message || 'Workspace creation failed');
+      toast.error(error.response?.data?.error?.message || 'Registration failed');
     }
   };
+
+  if (registeredEmail) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-white px-8">
+        <div className="w-full max-w-md rounded-lg border border-gray-200 p-8 shadow-sm">
+          <h1 className="text-3xl font-bold mb-3">Verify your email</h1>
+          <p className="text-gray-600">
+            We sent a verification link to <span className="font-medium text-gray-900">{registeredEmail}</span>.
+            Open it to continue workspace setup.
+          </p>
+          <Link to="/login" className="mt-6 inline-block text-blue-600 hover:underline font-medium">
+            Back to login
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen flex overflow-hidden">
@@ -86,7 +89,7 @@ export function SignupPage() {
               Call Coach <span className="text-green-600">Lab</span>
             </h1>
             <h2 className="text-xl font-semibold text-gray-900 mb-1">
-              Create Your Workspace
+              Create Your Account
             </h2>
             <p className="text-gray-600 text-sm">Start managing your calls today.</p>
           </div>
@@ -120,76 +123,31 @@ export function SignupPage() {
             <form onSubmit={handleSubmit} className="space-y-2.5">
               <div>
                 <input
-                  type="text"
-                  name="workspaceName"
-                  value={formData.workspaceName}
-                  onChange={handleChange}
-                  placeholder="Workspace Name"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all text-sm"
-                  required
-                />
-                {errors.workspaceName && (
-                  <p className="mt-1 text-xs text-red-600">{errors.workspaceName}</p>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <select
-                    name="industryType"
-                    value={formData.industryType}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all text-sm"
-                  >
-                    <option value="Dental">Dental</option>
-                    <option value="Skin">Skin</option>
-                    <option value="Hair">Hair</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-                <div>
-                  <select
-                    name="timezone"
-                    value={formData.timezone}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all text-sm"
-                  >
-                    <option value="America/New_York">ET</option>
-                    <option value="America/Chicago">CT</option>
-                    <option value="America/Denver">MT</option>
-                    <option value="America/Los_Angeles">PT</option>
-                    <option value="UTC">UTC</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <input
                   type="email"
-                  name="adminEmail"
-                  value={formData.adminEmail}
+                  name="email"
+                  value={formData.email}
                   onChange={handleChange}
-                  placeholder="Admin Email Address"
+                  placeholder="Work Email Address"
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all text-sm"
                   required
                 />
-                {errors.adminEmail && (
-                  <p className="mt-1 text-xs text-red-600">{errors.adminEmail}</p>
+                {errors.email && (
+                  <p className="mt-1 text-xs text-red-600">{errors.email}</p>
                 )}
               </div>
 
               <div>
                 <input
                   type="password"
-                  name="adminPassword"
-                  value={formData.adminPassword}
+                  name="password"
+                  value={formData.password}
                   onChange={handleChange}
                   placeholder="Password (min 8 characters)"
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all text-sm"
                   required
                 />
-                {errors.adminPassword && (
-                  <p className="mt-1 text-xs text-red-600">{errors.adminPassword}</p>
+                {errors.password && (
+                  <p className="mt-1 text-xs text-red-600">{errors.password}</p>
                 )}
               </div>
 
@@ -213,7 +171,7 @@ export function SignupPage() {
                 disabled={isLoading}
                 className="w-full py-2.5 px-4 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
               >
-                {isLoading ? 'Creating Workspace...' : 'Create Workspace'}
+                {isLoading ? 'Creating Account...' : 'Create Account'}
               </button>
             </form>
 

@@ -18,7 +18,10 @@ const fetchCSRFToken = async () => {
     const response = await axios.get(`${API_BASE_URL}/csrf`, {
       withCredentials: true,
     });
-    const csrfToken = response.data.data.csrfToken;
+    const csrfToken = response.data.csrfToken || response.data.data?.csrfToken;
+    if (!csrfToken) {
+      throw new Error('CSRF token missing from /csrf response');
+    }
     localStorage.setItem('csrfToken', csrfToken);
     return csrfToken;
   } catch (error) {
@@ -33,7 +36,7 @@ csrfTokenPromise = fetchCSRFToken();
 // Request interceptor to add auth token and CSRF token
 api.interceptors.request.use(
   async (config) => {
-    const token = localStorage.getItem('accessToken');
+    const token = localStorage.getItem('accessToken') || localStorage.getItem('setupToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -72,7 +75,7 @@ api.interceptors.response.use(
     // If CSRF token missing/invalid, fetch new token and retry
     if (
       error.response?.status === 403 &&
-      error.response?.data?.error?.code === 'CSRF' &&
+      error.response?.data?.error?.code?.startsWith('CSRF') &&
       !originalRequest._csrfRetry
     ) {
       originalRequest._csrfRetry = true;
@@ -89,10 +92,14 @@ api.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
+        const csrfToken = localStorage.getItem('csrfToken') || await fetchCSRFToken();
         const response = await axios.post(
           `${API_BASE_URL}/auth/refresh`,
           {},
-          { withCredentials: true }
+          {
+            withCredentials: true,
+            headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {},
+          }
         );
 
         const { accessToken } = response.data.data.auth;

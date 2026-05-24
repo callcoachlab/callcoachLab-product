@@ -21,7 +21,7 @@ export function UsersPage() {
   const [teams, setTeams] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [editingUser, setEditingUser] = useState(null);
-  const [formData, setFormData] = useState({ role: 'AGENT', status: 'ACTIVE', teamIds: [] });
+  const [formData, setFormData] = useState({ role: 'AGENT', name: '', myoperatorUserId: '', teamIds: [] });
 
   const { user: currentUser } = useAuthStore();
   const navigate = useNavigate();
@@ -53,14 +53,15 @@ export function UsersPage() {
     setEditingUser(user);
     setFormData({
       role: user.role || 'AGENT',
-      status: user.status || 'ACTIVE',
+      name: user.name || '',
+      myoperatorUserId: user.myoperatorUserId || '',
       teamIds: user.teamIds || [],
     });
   };
 
   const handleCloseEdit = () => {
     setEditingUser(null);
-    setFormData({ role: 'AGENT', status: 'ACTIVE', teamIds: [] });
+    setFormData({ role: 'AGENT', name: '', myoperatorUserId: '', teamIds: [] });
   };
 
   const toggleTeam = (teamId) => {
@@ -112,8 +113,9 @@ export function UsersPage() {
   const getStatusBadgeColor = (status) => {
     const colors = {
       ACTIVE: 'bg-green-100 text-green-800',
-      INACTIVE: 'bg-gray-100 text-gray-800',
-      SUSPENDED: 'bg-red-100 text-red-800',
+      DISABLED: 'bg-red-100 text-red-800',
+      PENDING_VERIFICATION: 'bg-yellow-100 text-yellow-800',
+      EMAIL_VERIFIED: 'bg-blue-100 text-blue-800',
     };
     return colors[status] || 'bg-gray-100 text-gray-800';
   };
@@ -218,22 +220,27 @@ export function UsersPage() {
               >
                 <option value="AGENT">Agent</option>
                 <option value="MANAGER">Manager</option>
-                <option value="ADMIN">Admin</option>
               </select>
             </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Status</label>
-              <select
-                value={formData.status}
-                onChange={(event) => setFormData({ ...formData, status: event.target.value })}
+            <label>
+              <span className="mb-1 block text-sm font-medium text-gray-700">Display name</span>
+              <input
+                value={formData.name}
+                onChange={(event) => setFormData({ ...formData, name: event.target.value })}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="ACTIVE">Active</option>
-                <option value="INACTIVE">Inactive</option>
-                <option value="SUSPENDED">Suspended</option>
-              </select>
-            </div>
+              />
+            </label>
           </div>
+
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium text-gray-700">MyOperator user ID</span>
+            <input
+              value={formData.myoperatorUserId}
+              onChange={(event) => setFormData({ ...formData, myoperatorUserId: event.target.value })}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="mo-uuid-abc123"
+            />
+          </label>
 
           {teams.length > 0 && (
             <div>

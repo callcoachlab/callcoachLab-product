@@ -13,7 +13,8 @@ export const useAuthStore = create((set) => ({
     set({ isLoading: true, error: null });
     try {
       const { user, workspace } = await authService.login(email, password);
-      set({ user, workspace, isAuthenticated: true, isLoading: false });
+      const isAuthenticated = Boolean(workspace);
+      set({ user, workspace, isAuthenticated, isLoading: false });
       return { user, workspace };
     } catch (error) {
       const errorMessage = error.response?.data?.error?.message || 'Login failed';
@@ -39,6 +40,32 @@ export const useAuthStore = create((set) => ({
       return { user, workspace };
     } catch (error) {
       const errorMessage = error.response?.data?.error?.message || 'Workspace creation failed';
+      set({ error: errorMessage, isLoading: false });
+      throw error;
+    }
+  },
+
+  register: async (email, password) => {
+    set({ isLoading: true, error: null });
+    try {
+      const data = await authService.register(email, password);
+      set({ isLoading: false });
+      return data;
+    } catch (error) {
+      const errorMessage = error.response?.data?.error?.message || 'Registration failed';
+      set({ error: errorMessage, isLoading: false });
+      throw error;
+    }
+  },
+
+  verifyEmail: async (token) => {
+    set({ isLoading: true, error: null });
+    try {
+      const data = await authService.verifyEmail(token);
+      set({ user: data.user || null, isLoading: false });
+      return data;
+    } catch (error) {
+      const errorMessage = error.response?.data?.error?.message || 'Email verification failed';
       set({ error: errorMessage, isLoading: false });
       throw error;
     }
