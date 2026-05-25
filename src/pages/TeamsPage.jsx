@@ -15,6 +15,7 @@ export function TeamsPage() {
   const [editingTeam, setEditingTeam] = useState(null);
   const [formData, setFormData] = useState({ name: '', description: '' });
   const [errors, setErrors] = useState({});
+  const [page, setPage] = useState(1);
   
   const { user } = useAuthStore();
   const toast = useToast();
@@ -23,12 +24,12 @@ export function TeamsPage() {
 
   useEffect(() => {
     fetchTeams();
-  }, []);
+  }, [page]);
 
   const fetchTeams = async () => {
     try {
       setIsLoading(true);
-      const response = await teamService.getTeams();
+      const response = await teamService.getTeams({ page, limit: 20 });
       // Check if response is already the data array or has nested structure
       const teamsList = Array.isArray(response) ? response : (response.teams || response.data || []);
       // Normalize id to _id for consistency
@@ -188,6 +189,16 @@ export function TeamsPage() {
           ))}
         </div>
       )}
+
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" disabled={page === 1} onClick={() => setPage((current) => current - 1)}>
+          Previous
+        </Button>
+        <span className="flex items-center px-3 text-sm text-gray-600">Page {page}</span>
+        <Button variant="outline" disabled={teams.length < 20} onClick={() => setPage((current) => current + 1)}>
+          Next
+        </Button>
+      </div>
 
       {/* Create/Edit Modal */}
       <Modal

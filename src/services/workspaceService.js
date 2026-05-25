@@ -11,13 +11,13 @@ export const workspaceService = {
   // Update workspace settings
   async updateSettings(settings) {
     const payload = settings.permissions || settings;
-    const response = await api.patch(API_ENDPOINTS.UPDATE_SETTINGS, payload);
+    const response = await api.patch(API_ENDPOINTS.UPDATE_SETTINGS, payload, { requiresCsrf: true });
     return response.data.data;
   },
 
   // Update workspace profile
   async updateWorkspace(data) {
-    const response = await api.patch(API_ENDPOINTS.UPDATE_MY_WORKSPACE, data);
+    const response = await api.patch(API_ENDPOINTS.UPDATE_MY_WORKSPACE, data, { requiresCsrf: true });
     return response.data.data;
   },
 

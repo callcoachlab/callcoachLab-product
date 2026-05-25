@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { workspaceService } from '../services/workspaceService';
+import { userService } from '../services/userService';
 import { Button } from '../components/Button';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/Card';
 import { Input } from '../components/Input';
@@ -13,8 +14,10 @@ export function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [workspace, setWorkspace] = useState(null);
   const [workspaceForm, setWorkspaceForm] = useState({ name: '', timezone: '', languagesEnabled: '' });
+  const [profileForm, setProfileForm] = useState({ name: '' });
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   
-  const { user } = useAuthStore();
+  const { user, updateUser } = useAuthStore();
   const toast = useToast();
 
   const canEditSettings = !user || user?.role === 'ADMIN';
@@ -26,18 +29,24 @@ export function SettingsPage() {
   const fetchData = async () => {
     try {
       setIsLoading(true);
-      const [workspaceData, settingsData] = await Promise.all([
+      const [workspaceData, settingsData, profileData] = await Promise.all([
         workspaceService.getMyWorkspace(),
         workspaceService.getSettings(),
+        userService.getMe(),
       ]);
       const workspacePayload = workspaceData.workspace || workspaceData;
+      const profilePayload = profileData.user || profileData;
       setWorkspace(workspacePayload);
       setWorkspaceForm({
         name: workspacePayload?.name || '',
         timezone: workspacePayload?.timezone || '',
         languagesEnabled: (workspacePayload?.languagesEnabled || []).join(', '),
       });
-      setSettings(settingsData.settings || settingsData);
+      setSettings({ permissions: settingsData.settings?.permissions || settingsData.permissions || settingsData });
+      setProfileForm({ name: profilePayload?.name || '' });
+      if (profilePayload) {
+        updateUser(profilePayload);
+      }
     } catch {
       toast.error('Failed to load settings');
     } finally {
@@ -64,6 +73,42 @@ export function SettingsPage() {
       toast.success('Settings saved successfully');
     } catch (error) {
       toast.error(error.response?.data?.error?.message || 'Failed to save settings');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleProfileSave = async () => {
+    try {
+      setIsSaving(true);
+      const response = await userService.updateProfile({ name: profileForm.name });
+      const updatedUser = response.user || response;
+      updateUser(updatedUser);
+      setProfileForm({ name: updatedUser.name || '' });
+      toast.success('Profile updated successfully');
+    } catch (error) {
+      toast.error(error.response?.data?.error?.message || 'Failed to update profile');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handlePasswordSave = async (event) => {
+    event.preventDefault();
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      toast.error('New passwords do not match');
+      return;
+    }
+    try {
+      setIsSaving(true);
+      await userService.changePassword({
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+      });
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      toast.success('Password changed successfully');
+    } catch (error) {
+      toast.error(error.response?.data?.error?.message || 'Failed to change password');
     } finally {
       setIsSaving(false);
     }
@@ -100,9 +145,7 @@ export function SettingsPage() {
 
   const permissions = [
     { key: 'managersCanEditScorecards', label: 'Managers can edit scorecards', description: 'Allow managers to create and modify scorecards' },
-    { key: 'managersCanPublishScorecards', label: 'Managers can publish scorecards', description: 'Allow managers to publish scorecard versions' },
     { key: 'managersCanEditOutcomes', label: 'Managers can edit outcomes', description: 'Allow managers to create and modify call outcomes' },
-    { key: 'managersCanManageIntegrations', label: 'Managers can manage integrations', description: 'Allow managers to configure call integrations' },
     { key: 'managersCanExportData', label: 'Managers can export data', description: 'Allow managers to export reports and data' },
     { key: 'agentsCanViewOwnCallScores', label: 'Agents can view their own scores', description: 'Allow agents to see their individual call scores' },
   ];
@@ -113,6 +156,26 @@ export function SettingsPage() {
         <h2 className="text-3xl font-bold text-gray-900">Settings</h2>
         <p className="text-gray-600 mt-1">Manage workspace settings and permissions</p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>My Profile</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <Input
+              label="Display Name"
+              value={profileForm.name}
+              onChange={(event) => setProfileForm({ name: event.target.value })}
+              fullWidth
+            />
+            <Input label="Email" value={user?.email || ''} disabled fullWidth />
+            <Button onClick={handleProfileSave} loading={isSaving} disabled={isSaving}>
+              Save Profile
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Workspace Info */}
       <Card>
@@ -155,6 +218,43 @@ export function SettingsPage() {
               </Button>
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Change Password</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handlePasswordSave} className="space-y-4">
+            <Input
+              label="Current Password"
+              type="password"
+              required
+              value={passwordForm.currentPassword}
+              onChange={(event) => setPasswordForm({ ...passwordForm, currentPassword: event.target.value })}
+              fullWidth
+            />
+            <Input
+              label="New Password"
+              type="password"
+              minLength={8}
+              required
+              value={passwordForm.newPassword}
+              onChange={(event) => setPasswordForm({ ...passwordForm, newPassword: event.target.value })}
+              fullWidth
+            />
+            <Input
+              label="Confirm New Password"
+              type="password"
+              minLength={8}
+              required
+              value={passwordForm.confirmPassword}
+              onChange={(event) => setPasswordForm({ ...passwordForm, confirmPassword: event.target.value })}
+              fullWidth
+            />
+            <Button type="submit" loading={isSaving} disabled={isSaving}>Change Password</Button>
+          </form>
         </CardContent>
       </Card>
 

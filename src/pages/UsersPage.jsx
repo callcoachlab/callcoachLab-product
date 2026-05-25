@@ -21,7 +21,9 @@ export function UsersPage() {
   const [teams, setTeams] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [editingUser, setEditingUser] = useState(null);
-  const [formData, setFormData] = useState({ role: 'AGENT', name: '', myoperatorUserId: '', teamIds: [] });
+  const [formData, setFormData] = useState({ role: 'AGENT', status: 'ACTIVE', teamIds: [] });
+  const [filterForm, setFilterForm] = useState({ role: '', status: '', teamId: '' });
+  const [filters, setFilters] = useState({});
 
   const { user: currentUser } = useAuthStore();
   const navigate = useNavigate();
@@ -31,13 +33,13 @@ export function UsersPage() {
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [filters]);
 
   const fetchUsers = async () => {
     try {
       setIsLoading(true);
       const [usersData, teamsData] = await Promise.all([
-        userService.getUsers(),
+        userService.getUsers(filters),
         teamService.getTeams({ limit: 100 }),
       ]);
       setUsers(listFromResponse(usersData, 'users'));
@@ -53,15 +55,14 @@ export function UsersPage() {
     setEditingUser(user);
     setFormData({
       role: user.role || 'AGENT',
-      name: user.name || '',
-      myoperatorUserId: user.myoperatorUserId || '',
+      status: user.status || 'ACTIVE',
       teamIds: user.teamIds || [],
     });
   };
 
   const handleCloseEdit = () => {
     setEditingUser(null);
-    setFormData({ role: 'AGENT', name: '', myoperatorUserId: '', teamIds: [] });
+    setFormData({ role: 'AGENT', status: 'ACTIVE', teamIds: [] });
   };
 
   const toggleTeam = (teamId) => {
@@ -120,6 +121,16 @@ export function UsersPage() {
     return colors[status] || 'bg-gray-100 text-gray-800';
   };
 
+  const handleFilter = (event) => {
+    event.preventDefault();
+    setFilters(Object.fromEntries(Object.entries(filterForm).filter(([, value]) => value)));
+  };
+
+  const clearFilters = () => {
+    setFilterForm({ role: '', status: '', teamId: '' });
+    setFilters({});
+  };
+
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -141,6 +152,51 @@ export function UsersPage() {
           </Button>
         )}
       </div>
+
+      <Card>
+        <form onSubmit={handleFilter} className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto_auto] md:items-end">
+          <label>
+            <span className="mb-1 block text-sm font-medium text-gray-700">Role</span>
+            <select
+              value={filterForm.role}
+              onChange={(event) => setFilterForm({ ...filterForm, role: event.target.value })}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2"
+            >
+              <option value="">All roles</option>
+              <option value="AGENT">Agent</option>
+              <option value="MANAGER">Manager</option>
+              <option value="ADMIN">Admin</option>
+            </select>
+          </label>
+          <label>
+            <span className="mb-1 block text-sm font-medium text-gray-700">Status</span>
+            <select
+              value={filterForm.status}
+              onChange={(event) => setFilterForm({ ...filterForm, status: event.target.value })}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2"
+            >
+              <option value="">All statuses</option>
+              <option value="ACTIVE">Active</option>
+              <option value="DISABLED">Disabled</option>
+            </select>
+          </label>
+          <label>
+            <span className="mb-1 block text-sm font-medium text-gray-700">Team</span>
+            <select
+              value={filterForm.teamId}
+              onChange={(event) => setFilterForm({ ...filterForm, teamId: event.target.value })}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2"
+            >
+              <option value="">All teams</option>
+              {teams.map((team) => (
+                <option key={team._id || team.id} value={team._id || team.id}>{team.name}</option>
+              ))}
+            </select>
+          </label>
+          <Button type="submit">Filter</Button>
+          <Button type="button" variant="ghost" onClick={clearFilters}>Clear</Button>
+        </form>
+      </Card>
 
       <Card padding={false}>
         <div className="overflow-x-auto">
@@ -222,25 +278,18 @@ export function UsersPage() {
                 <option value="MANAGER">Manager</option>
               </select>
             </div>
-            <label>
-              <span className="mb-1 block text-sm font-medium text-gray-700">Display name</span>
-              <input
-                value={formData.name}
-                onChange={(event) => setFormData({ ...formData, name: event.target.value })}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Status</label>
+              <select
+                value={formData.status}
+                onChange={(event) => setFormData({ ...formData, status: event.target.value })}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </label>
+              >
+                <option value="ACTIVE">Active</option>
+                <option value="DISABLED">Disabled</option>
+              </select>
+            </div>
           </div>
-
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium text-gray-700">MyOperator user ID</span>
-            <input
-              value={formData.myoperatorUserId}
-              onChange={(event) => setFormData({ ...formData, myoperatorUserId: event.target.value })}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="mo-uuid-abc123"
-            />
-          </label>
 
           {teams.length > 0 && (
             <div>

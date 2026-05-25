@@ -41,11 +41,11 @@ export function LoginPage() {
       const result = await login(email, password);
       if (!result.workspace) {
         toast.success('Email verified. Finish workspace setup.');
-        navigate('/setup');
+        navigate('/setup', { replace: true });
         return;
       }
       toast.success('Login successful!');
-      navigate('/dashboard');
+      navigate('/dashboard', { replace: true });
     } catch (error) {
       toast.error(error.response?.data?.error?.message || 'Login failed');
     }
@@ -119,6 +119,11 @@ export function LoginPage() {
                 {errors.password && (
                   <p className="mt-1 text-xs text-red-600">{errors.password}</p>
                 )}
+                <div className="mt-2 text-right">
+                  <Link to="/forgot-password" className="text-sm font-medium text-blue-600 hover:underline">
+                    Forgot password?
+                  </Link>
+                </div>
               </div>
 
               <button

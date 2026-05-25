@@ -18,9 +18,8 @@ const defaultSections = [
 const emptyForm = {
   name: '',
   description: '',
-  callType: 'inbound',
-  isDefault: false,
-  isActive: true,
+  callType: 'Compliance',
+  isPublished: false,
   sectionsText: JSON.stringify(defaultSections, null, 2),
 };
 
@@ -61,9 +60,8 @@ export function ScorecardsPage() {
     setFormData(scorecard ? {
       name: scorecard.name || '',
       description: scorecard.description || '',
-      callType: scorecard.callType || 'inbound',
-      isDefault: Boolean(scorecard.isDefault),
-      isActive: scorecard.isActive !== false,
+      callType: scorecard.callType || 'Compliance',
+      isPublished: Boolean(scorecard.isPublished),
       sectionsText: JSON.stringify(scorecard.sections?.length ? scorecard.sections : defaultSections, null, 2),
     } : emptyForm);
     setIsModalOpen(true);
@@ -87,14 +85,15 @@ export function ScorecardsPage() {
       const sections = JSON.parse(formData.sectionsText || '[]');
       const payload = {
         name: formData.name,
-        description: formData.description,
         callType: formData.callType,
-        isDefault: formData.isDefault,
-        isActive: formData.isActive,
-        sections,
+        isPublished: formData.isPublished,
       };
       if (editingScorecard) {
-        await scorecardService.updateScorecard(editingScorecard._id || editingScorecard.id, payload);
+        await scorecardService.updateScorecard(editingScorecard._id || editingScorecard.id, {
+          ...payload,
+          description: formData.description,
+          sections,
+        });
         toast.success('Scorecard updated');
       } else {
         await scorecardService.createScorecard(payload);
@@ -154,8 +153,8 @@ export function ScorecardsPage() {
                 <CardHeader>
                   <div className="flex items-start justify-between gap-3">
                     <CardTitle>{scorecard.name}</CardTitle>
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${scorecard.isActive !== false ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'}`}>
-                      {scorecard.isDefault ? 'Default' : scorecard.isActive !== false ? 'Active' : 'Inactive'}
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${scorecard.isPublished ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'}`}>
+                      {scorecard.isPublished ? 'Published' : 'Draft'}
                     </span>
                   </div>
                 </CardHeader>
@@ -204,35 +203,22 @@ export function ScorecardsPage() {
             placeholder="Scorecard for inbound appointment calls"
             fullWidth
           />
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Call Type</label>
-            <select
-              value={formData.callType}
-              onChange={(event) => setFormData({ ...formData, callType: event.target.value })}
-              className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="inbound">Inbound</option>
-              <option value="outbound">Outbound</option>
-              <option value="any">Any</option>
-            </select>
-          </div>
+          <Input
+            label="Call Type"
+            value={formData.callType}
+            onChange={(event) => setFormData({ ...formData, callType: event.target.value })}
+            placeholder="Compliance"
+            required
+            fullWidth
+          />
           <label className="flex items-center gap-3 rounded-lg border border-gray-200 p-3">
             <input
               type="checkbox"
-              checked={formData.isDefault}
-              onChange={(event) => setFormData({ ...formData, isDefault: event.target.checked })}
+              checked={formData.isPublished}
+              onChange={(event) => setFormData({ ...formData, isPublished: event.target.checked })}
               className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
             />
-            <span className="text-sm font-medium text-gray-800">Default for this call type</span>
-          </label>
-          <label className="flex items-center gap-3 rounded-lg border border-gray-200 p-3">
-            <input
-              type="checkbox"
-              checked={formData.isActive}
-              onChange={(event) => setFormData({ ...formData, isActive: event.target.checked })}
-              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-            />
-            <span className="text-sm font-medium text-gray-800">Active</span>
+            <span className="text-sm font-medium text-gray-800">Publish scorecard</span>
           </label>
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-gray-700">Sections JSON</span>

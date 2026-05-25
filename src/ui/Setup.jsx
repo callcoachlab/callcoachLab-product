@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { CheckCircle, Languages, Loader2 } from 'lucide-react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { CircleAlert, CheckCircle, Languages, Loader2 } from 'lucide-react';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useToast } from '../components/Toast';
 
@@ -23,8 +23,11 @@ export default function CallCoach360Setup() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const toast = useToast();
-  const { createWorkspace, verifyEmail, isLoading } = useAuthStore();
-  const [isVerifying, setIsVerifying] = useState(false);
+  const { createWorkspace, verifyEmail, isAuthenticated, isLoading } = useAuthStore();
+  const verificationToken = searchParams.get('token');
+  const [isVerifying, setIsVerifying] = useState(Boolean(verificationToken));
+  const [verificationError, setVerificationError] = useState('');
+  const verifiedTokenRef = useRef(null);
   const [formData, setFormData] = useState({
     workspaceName: '',
     industryType: 'dental',
@@ -34,23 +37,28 @@ export default function CallCoach360Setup() {
   });
 
   useEffect(() => {
-    const token = searchParams.get('token');
-    if (!token) return;
+    const token = verificationToken;
+    if (!token || verifiedTokenRef.current === token) return;
+    verifiedTokenRef.current = token;
 
     const verify = async () => {
       try {
         setIsVerifying(true);
+        setVerificationError('');
         await verifyEmail(token);
-        toast.success('Email verified. Finish workspace setup.');
+        toast.success('Email verified. Log in to continue.');
+        navigate('/login', { replace: true });
       } catch (error) {
-        toast.error(error.response?.data?.error?.message || 'Email verification failed');
+        const message = error.response?.data?.error?.message || 'Email verification failed';
+        setVerificationError(message);
+        toast.error(message);
       } finally {
         setIsVerifying(false);
       }
     };
 
     verify();
-  }, [searchParams, toast, verifyEmail]);
+  }, [navigate, toast, verificationToken, verifyEmail]);
 
   const toggleLanguage = (language) => {
     setFormData((current) => {
@@ -75,11 +83,35 @@ export default function CallCoach360Setup() {
     try {
       await createWorkspace(formData);
       toast.success('Workspace created successfully.');
-      navigate('/dashboard');
+      navigate('/dashboard', { replace: true });
     } catch (error) {
       toast.error(error.response?.data?.error?.message || 'Workspace setup failed');
     }
   };
+
+  if (verificationToken) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
+        <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-50 text-green-700">
+            {verificationError ? <CircleAlert className="h-6 w-6 text-red-600" /> : <Loader2 className="h-6 w-6 animate-spin" />}
+          </div>
+          <h1 className="text-2xl font-bold text-slate-950">Verify your email</h1>
+          <p className="mt-2 text-sm text-slate-600">
+            {verificationError || 'Confirming your email address. You will be sent to login when it is complete.'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  if (!localStorage.getItem('setupToken')) {
+    return <Navigate to="/login" replace />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">

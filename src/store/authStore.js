@@ -24,11 +24,11 @@ export const useAuthStore = create((set) => ({
   },
 
   logout: async () => {
-    set({ isLoading: true });
+    set({ user: null, workspace: null, isAuthenticated: false, isLoading: true, error: null });
     try {
       await authService.logout();
     } finally {
-      set({ user: null, workspace: null, isAuthenticated: false, isLoading: false, error: null });
+      set({ isLoading: false });
     }
   },
 
@@ -58,11 +58,24 @@ export const useAuthStore = create((set) => ({
     }
   },
 
+  acceptInvite: async (token, password, name) => {
+    set({ isLoading: true, error: null });
+    try {
+      const { user, workspace } = await authService.acceptInvite(token, password, name);
+      set({ user, workspace, isAuthenticated: true, isLoading: false });
+      return { user, workspace };
+    } catch (error) {
+      const errorMessage = error.response?.data?.error?.message || 'Invite acceptance failed';
+      set({ error: errorMessage, isLoading: false });
+      throw error;
+    }
+  },
+
   verifyEmail: async (token) => {
     set({ isLoading: true, error: null });
     try {
       const data = await authService.verifyEmail(token);
-      set({ user: data.user || null, isLoading: false });
+      set({ isLoading: false });
       return data;
     } catch (error) {
       const errorMessage = error.response?.data?.error?.message || 'Email verification failed';

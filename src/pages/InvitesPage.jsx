@@ -21,6 +21,7 @@ export function InvitesPage() {
   const [invites, setInvites] = useState([]);
   const [teams, setTeams] = useState([]);
   const [status, setStatus] = useState('');
+  const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formRows, setFormRows] = useState([emptyInvite]);
@@ -29,13 +30,13 @@ export function InvitesPage() {
 
   useEffect(() => {
     fetchData();
-  }, [status]);
+  }, [status, page]);
 
   const fetchData = async () => {
     try {
       setIsLoading(true);
       const [inviteResponse, teamResponse] = await Promise.all([
-        inviteService.getInvites(status ? { status } : {}),
+        inviteService.getInvites({ page, limit: 20, ...(status ? { status } : {}) }),
         teamService.getTeams({ limit: 100 }),
       ]);
       setInvites(listFromResponse(inviteResponse, 'invites'));
@@ -118,7 +119,7 @@ export function InvitesPage() {
         <div className="flex gap-3">
           <select
             value={status}
-            onChange={(event) => setStatus(event.target.value)}
+            onChange={(event) => { setStatus(event.target.value); setPage(1); }}
             className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">All statuses</option>
@@ -176,6 +177,16 @@ export function InvitesPage() {
           </table>
         </div>
       </Card>
+
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" disabled={page === 1} onClick={() => setPage((current) => current - 1)}>
+          Previous
+        </Button>
+        <span className="flex items-center px-3 text-sm text-gray-600">Page {page}</span>
+        <Button variant="outline" disabled={invites.length < 20} onClick={() => setPage((current) => current + 1)}>
+          Next
+        </Button>
+      </div>
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Create Invites" size="xl">
         <form onSubmit={handleCreateInvites} className="space-y-4">
