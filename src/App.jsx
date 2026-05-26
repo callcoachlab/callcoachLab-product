@@ -14,11 +14,11 @@ import { DashboardLayout } from './components/DashboardLayout';
 import { Toast } from './components/Toast';
 import './App.css';
 import CallCoach360Setup from './ui/Setup';
+import CallsDashboard from './pages/CallsDashboard';
+import ManagerDashboard from './pages/ManagerDashboard';
+import AdminDashboard from './pages/AdminDashboard';
 
 function App() {
-  // Auth gating is temporarily disabled for now.
-  // const { isAuthenticated } = useAuthStore();
-
   return (
     <BrowserRouter>
       <Toast />
@@ -26,11 +26,7 @@ function App() {
         {/* Public Routes */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
-
-        <Route
-          path='/setup'
-          element={<CallCoach360Setup/>}
-        />
+        <Route path="/setup" element={<CallCoach360Setup />} />
 
         {/* Protected Routes */}
         {/* <Route element={<ProtectedRoute />}> */}
@@ -42,7 +38,14 @@ function App() {
           <Route path="/audit-logs" element={<DashboardLayout><AuditLogsPage /></DashboardLayout>} />
           <Route path="/settings" element={<DashboardLayout><SettingsPage /></DashboardLayout>} />
           <Route path="/scorecards/new" element={<CreateScorecardPage />} />
+          <Route path="/manager" element={<ManagerDashboard />} />
+          {/* Calls — has its own built-in sidebar and header, no DashboardLayout */}
+          <Route path="/calls" element={<CallsDashboard />} />
+          <Route path="/admin" element={<AdminDashboard />} />
         {/* </Route> */}
+
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/calls" replace />} />
       </Routes>
     </BrowserRouter>
   );
