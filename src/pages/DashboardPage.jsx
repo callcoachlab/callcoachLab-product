@@ -1,227 +1,381 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Activity,
+  CheckCircle2,
+  ClipboardList,
+  Clock3,
+  Layers3,
+  Mail,
+  ShieldCheck,
+  Users,
+} from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { healthService } from '../services/healthService';
+import { userService } from '../services/userService';
+import { teamService } from '../services/teamService';
+import { inviteService } from '../services/inviteService';
+import { scorecardService } from '../services/scorecardService';
+import { auditLogService } from '../services/auditLogService';
+import { Card } from '../components/Card';
+import { Spinner } from '../components/Spinner';
 
-export function DashboardPage() {
-  const { user, workspace, fetchWorkspace } = useAuthStore();
-  const [currentDate] = useState(new Date());
-  const [apiHealth, setApiHealth] = useState(null);
+const listFromResponse = (response, key) => {
+  if (Array.isArray(response)) return response;
+  if (Array.isArray(response?.[key])) return response[key];
+  if (Array.isArray(response?.data)) return response.data;
+  return [];
+};
 
-  useEffect(() => {
-    // Fetch the current workspace on component mount
-    fetchWorkspace().catch((error) => {
-      console.error('Failed to fetch workspace:', error);
-    });
-    healthService.checkHealth()
-      .then(setApiHealth)
-      .catch(() => setApiHealth({ status: 'offline' }));
-  }, [fetchWorkspace]);
+const getId = (item) => item?._id || item?.id;
 
-  // These will come from backend API calls in the future
-  // For now showing how the UI handles the data structure
-  const dashboardStats = {
-    todaysCallsWaiting: workspace?.todaysCallsWaiting || 0,
-    bookedCalls: workspace?.bookedCalls || 0,
-    totalCallsAttended: workspace?.totalCallsAttended || 0,
-    callsCompletedPercentage: workspace?.callsCompletedPercentage || 0,
-    callsNeedReview: workspace?.callsNeedReview || 0,
-    articles: workspace?.articles || 0,
-    criticalFails: workspace?.criticalFails || 0
-  };
+const formatDateTime = (value) => {
+  if (!value) return 'Not recorded';
+  return new Date(value).toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+};
 
-  // Timeline data will come from API
-  const timelineData = workspace?.todaysSchedule || [];
+const normalizeText = (value) => (
+  value ? String(value).replaceAll('_', ' ').toLowerCase() : 'Unknown'
+);
 
-  // Client performance data will come from API  
-  const clientData = workspace?.clientPerformance || [];
-
-  const formatDateShort = (date) => {
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric' 
-    });
+function MetricCard({ title, value, detail, icon, tone = 'blue' }) {
+  const tones = {
+    blue: 'bg-blue-50 text-blue-700 ring-blue-100',
+    green: 'bg-green-50 text-green-700 ring-green-100',
+    amber: 'bg-amber-50 text-amber-700 ring-amber-100',
+    violet: 'bg-violet-50 text-violet-700 ring-violet-100',
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      {/* Main Content */}
-      <div className="flex-1 p-6">
-        {/* Header */}
-        <div className="mb-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">
-              Good morning, {user?.name || 'User'}!
-            </h1>
-            <div className={`rounded-lg border px-3 py-2 text-sm ${apiHealth?.status === 'offline' ? 'border-red-200 bg-red-50 text-red-700' : 'border-green-200 bg-green-50 text-green-700'}`}>
-              API {apiHealth?.status === 'offline' ? 'Offline' : 'Healthy'}
-            </div>
-          </div>
-          <p className="text-gray-600">
-            Call Coach 360° wishes you a good and productive day. <span className="text-blue-600 font-semibold">{dashboardStats.todaysCallsWaiting} calls</span> waiting for you today. You also have <span className="text-blue-600 font-semibold">{dashboardStats.bookedCalls} booked calls</span> in your calendar today.
+    <Card className="shadow-sm ring-1 ring-gray-100">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium text-gray-500">{title}</p>
+          <p className="mt-2 text-3xl font-bold text-gray-950">{value}</p>
+        </div>
+        <div className={`rounded-lg p-3 ring-1 ${tones[tone]}`}>
+          {icon}
+        </div>
+      </div>
+      <p className="mt-4 text-sm text-gray-600">{detail}</p>
+    </Card>
+  );
+}
+
+function ProgressRow({ label, value, total, tone = 'bg-blue-600' }) {
+  const width = total ? Math.round((value / total) * 100) : 0;
+
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between gap-3 text-sm">
+        <span className="font-medium text-gray-700">{label}</span>
+        <span className="text-gray-500">{value}</span>
+      </div>
+      <div className="h-2 rounded-full bg-gray-100">
+        <div className={`h-2 rounded-full ${tone}`} style={{ width: `${width}%` }} />
+      </div>
+    </div>
+  );
+}
+
+export function DashboardPage() {
+  const { user, workspace, fetchWorkspace } = useAuthStore();
+  const [dashboardData, setDashboardData] = useState({
+    users: [],
+    teams: [],
+    invites: [],
+    scorecards: [],
+    auditLogs: [],
+  });
+  const [apiHealth, setApiHealth] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadDashboard = async () => {
+      try {
+        setIsLoading(true);
+        setLoadError('');
+
+        const [workspaceResult, healthResult, usersResult, teamsResult, invitesResult, scorecardsResult, logsResult] = await Promise.allSettled([
+          fetchWorkspace(),
+          healthService.checkHealth(),
+          userService.getUsers({ limit: 100 }),
+          teamService.getTeams({ limit: 100 }),
+          inviteService.getInvites({ limit: 100 }),
+          scorecardService.getScorecards({ limit: 100 }),
+          auditLogService.getAuditLogs({ page: 1, limit: 8 }),
+        ]);
+
+        if (!isMounted) return;
+
+        setApiHealth(healthResult.status === 'fulfilled' ? healthResult.value : { status: 'offline' });
+        setDashboardData({
+          users: usersResult.status === 'fulfilled' ? listFromResponse(usersResult.value, 'users') : [],
+          teams: teamsResult.status === 'fulfilled' ? listFromResponse(teamsResult.value, 'teams') : [],
+          invites: invitesResult.status === 'fulfilled' ? listFromResponse(invitesResult.value, 'invites') : [],
+          scorecards: scorecardsResult.status === 'fulfilled' ? listFromResponse(scorecardsResult.value, 'scorecards') : [],
+          auditLogs: logsResult.status === 'fulfilled' ? listFromResponse(logsResult.value, 'auditLogs') : [],
+        });
+
+        const failedRequiredCalls = [workspaceResult, usersResult, teamsResult, invitesResult, scorecardsResult, logsResult]
+          .filter((result) => result.status === 'rejected');
+        if (failedRequiredCalls.length) {
+          setLoadError('Some dashboard sections could not be refreshed.');
+        }
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    loadDashboard();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [fetchWorkspace]);
+
+  const stats = useMemo(() => {
+    const { users, teams, invites, scorecards, auditLogs } = dashboardData;
+    const activeUsers = users.filter((item) => item.status === 'ACTIVE').length;
+    const disabledUsers = users.filter((item) => item.status === 'DISABLED').length;
+    const pendingInvites = invites.filter((item) => item.status === 'PENDING').length;
+    const acceptedInvites = invites.filter((item) => item.status === 'ACCEPTED').length;
+    const publishedScorecards = scorecards.filter((item) => item.isPublished).length;
+    const draftScorecards = scorecards.length - publishedScorecards;
+    const totalMembers = teams.reduce((sum, team) => sum + Number(team.memberCount || 0), 0);
+    const teamsWithMembers = teams.filter((team) => Number(team.memberCount || 0) > 0).length;
+    const roles = users.reduce((acc, item) => {
+      const role = item.role || 'UNKNOWN';
+      acc[role] = (acc[role] || 0) + 1;
+      return acc;
+    }, {});
+    const recentActiveUsers = users
+      .filter((item) => item.lastLoginAt)
+      .sort((a, b) => new Date(b.lastLoginAt) - new Date(a.lastLoginAt))
+      .slice(0, 4);
+    const setupItems = [
+      { label: 'Workspace profile', done: Boolean(workspace?.name || workspace?.workspace?.name) },
+      { label: 'Teams created', done: teams.length > 0 },
+      { label: 'Users active', done: activeUsers > 0 },
+      { label: 'Scorecards published', done: publishedScorecards > 0 },
+      { label: 'Invites sent', done: invites.length > 0 },
+    ];
+    const completedSetup = setupItems.filter((item) => item.done).length;
+
+    return {
+      activeUsers,
+      disabledUsers,
+      pendingInvites,
+      acceptedInvites,
+      publishedScorecards,
+      draftScorecards,
+      totalMembers,
+      teamsWithMembers,
+      roles,
+      recentActiveUsers,
+      recentLogs: auditLogs.slice(0, 5),
+      setupItems,
+      setupPercent: Math.round((completedSetup / setupItems.length) * 100),
+    };
+  }, [dashboardData, workspace]);
+
+  if (isLoading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Spinner size="lg" className="text-blue-600" />
+      </div>
+    );
+  }
+
+  const workspaceName = workspace?.name || workspace?.workspace?.name || 'Workspace';
+  const totalUsers = dashboardData.users.length;
+  const totalTeams = dashboardData.teams.length;
+  const totalInvites = dashboardData.invites.length;
+  const totalScorecards = dashboardData.scorecards.length;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">{workspaceName}</p>
+          <h2 className="mt-1 text-3xl font-bold text-gray-950">
+            Good morning, {user?.name || user?.email || 'User'}
+          </h2>
+          <p className="mt-2 max-w-3xl text-gray-600">
+            Your workspace has {stats.activeUsers} active users across {totalTeams} teams, with {stats.pendingInvites} pending invites and {stats.publishedScorecards} published scorecards ready for quality reviews.
           </p>
         </div>
-
-        {/* Date and Timeline */}
-        <div className="bg-white rounded-lg shadow-sm">
-          <div className="border-b border-gray-200 p-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-gray-900">📅 {formatDateShort(currentDate)}</h2>
-              <div className="text-sm text-gray-500">
-                <span className="mr-4">Time</span>
-                <span>Today's timeline</span>
-              </div>
-            </div>
-          </div>
-          
-          <div className="divide-y divide-gray-100">
-            {timelineData.length > 0 ? timelineData.map((call, index) => (
-              <div key={index} className="p-4 hover:bg-gray-50">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                    <div className="text-sm font-medium text-gray-500 w-12">
-                      {call.time}
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-medium">
-                        {call.agent?.split(' ').map(n => n[0]).join('') || 'NA'}
-                      </div>
-                      <div>
-                        <div className="font-medium text-gray-900">{call.agent || 'N/A'}</div>
-                        <div className="text-sm text-gray-500">{call.phone || 'N/A'}</div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center space-x-8">
-                    <div className="text-center">
-                      <div className="text-xs text-gray-400">📞 Call type:</div>
-                      <div className="text-sm font-medium text-gray-900">{call.callType || 'N/A'}</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-xs text-gray-400">📍 Location:</div>
-                      <div className="text-sm font-medium text-gray-900">{call.location || 'N/A'}</div>
-                    </div>
-                    {call.isBooked && (
-                      <div className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-medium">
-                        Booked Call
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )) : (
-              <div className="p-8 text-center text-gray-500">
-                <div className="text-2xl mb-2">📅</div>
-                <p>No calls scheduled for today</p>
-              </div>
-            )}
-          </div>
+        <div className={`flex w-fit items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium ${apiHealth?.status === 'offline' ? 'border-red-200 bg-red-50 text-red-700' : 'border-green-200 bg-green-50 text-green-700'}`}>
+          <Activity className="h-4 w-4" aria-hidden="true" />
+          API {apiHealth?.status === 'offline' ? 'Offline' : 'Healthy'}
         </div>
       </div>
 
-      {/* Right Sidebar */}
-      <div className="w-80 bg-white shadow-sm p-6 space-y-6">
-        {/* Calendar */}
-        <div className="bg-pink-100 rounded-lg p-4">
-          <div className="text-center mb-4">
-            <div className="bg-pink-400 text-white px-3 py-1 rounded-full text-sm font-medium inline-block">
-              May 2025
+      {loadError && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          {loadError}
+        </div>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          title="Active Users"
+          value={stats.activeUsers}
+          detail={`${stats.disabledUsers} disabled of ${totalUsers} total users`}
+          icon={<Users className="h-5 w-5" aria-hidden="true" />}
+          tone="blue"
+        />
+        <MetricCard
+          title="Teams"
+          value={totalTeams}
+          detail={`${stats.teamsWithMembers} teams have assigned members`}
+          icon={<Layers3 className="h-5 w-5" aria-hidden="true" />}
+          tone="green"
+        />
+        <MetricCard
+          title="Pending Invites"
+          value={stats.pendingInvites}
+          detail={`${stats.acceptedInvites} accepted from ${totalInvites} invites`}
+          icon={<Mail className="h-5 w-5" aria-hidden="true" />}
+          tone="amber"
+        />
+        <MetricCard
+          title="Published Scorecards"
+          value={stats.publishedScorecards}
+          detail={`${stats.draftScorecards} drafts from ${totalScorecards} scorecards`}
+          icon={<ClipboardList className="h-5 w-5" aria-hidden="true" />}
+          tone="violet"
+        />
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,1fr)]">
+        <Card className="shadow-sm ring-1 ring-gray-100">
+          <div className="mb-5 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-950">Workspace Composition</h3>
+              <p className="mt-1 text-sm text-gray-500">Live ratios from users, teams, invites, and scorecards</p>
+            </div>
+            <ShieldCheck className="h-5 w-5 text-blue-600" aria-hidden="true" />
+          </div>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div className="space-y-4">
+              <ProgressRow label="Active users" value={stats.activeUsers} total={Math.max(totalUsers, 1)} tone="bg-blue-600" />
+              <ProgressRow label="Teams with members" value={stats.teamsWithMembers} total={Math.max(totalTeams, 1)} tone="bg-green-600" />
+              <ProgressRow label="Published scorecards" value={stats.publishedScorecards} total={Math.max(totalScorecards, 1)} tone="bg-violet-600" />
+              <ProgressRow label="Accepted invites" value={stats.acceptedInvites} total={Math.max(totalInvites, 1)} tone="bg-amber-500" />
+            </div>
+            <div className="rounded-lg bg-gray-50 p-4">
+              <h4 className="text-sm font-semibold text-gray-900">Role split</h4>
+              <div className="mt-4 space-y-3">
+                {['ADMIN', 'MANAGER', 'AGENT'].map((role) => (
+                  <div key={role} className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">{normalizeText(role)}</span>
+                    <span className="font-semibold text-gray-950">{stats.roles[role] || 0}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-5 rounded-lg border border-gray-200 bg-white p-3">
+                <p className="text-sm text-gray-500">Average members per team</p>
+                <p className="mt-1 text-2xl font-bold text-gray-950">
+                  {totalTeams ? (stats.totalMembers / totalTeams).toFixed(1) : '0.0'}
+                </p>
+              </div>
             </div>
           </div>
-          <div className="grid grid-cols-7 gap-1 text-xs text-center">
-            {['MON', 'TUE', 'WED', 'THUS', 'FRI', 'SAT', 'SUN'].map(day => (
-              <div key={day} className="font-medium text-gray-600 p-1">{day}</div>
+        </Card>
+
+        <Card className="shadow-sm ring-1 ring-gray-100">
+          <div className="mb-5 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-950">Setup Progress</h3>
+              <p className="mt-1 text-sm text-gray-500">{stats.setupPercent}% complete</p>
+            </div>
+            <div className="rounded-lg bg-green-50 p-3 text-green-700 ring-1 ring-green-100">
+              <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+            </div>
+          </div>
+          <div className="mb-5 h-3 rounded-full bg-gray-100">
+            <div className="h-3 rounded-full bg-green-600" style={{ width: `${stats.setupPercent}%` }} />
+          </div>
+          <div className="space-y-3">
+            {stats.setupItems.map((item) => (
+              <div key={item.label} className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 px-3 py-2">
+                <span className="text-sm font-medium text-gray-700">{item.label}</span>
+                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${item.done ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+                  {item.done ? 'Done' : 'Open'}
+                </span>
+              </div>
             ))}
-            {[...Array(35)].map((_, i) => {
-              const date = i + 1;
-              const isToday = date === 15;
-              const isWeekend = (i + 1) % 7 === 0 || (i + 2) % 7 === 0;
-              if (date > 31) return <div key={i} className="p-1"></div>;
-              return (
-                <div 
-                  key={i} 
-                  className={`p-1 ${isToday ? 'bg-pink-400 text-white rounded-full' : ''} ${isWeekend ? 'text-gray-400' : 'text-gray-700'}`}
-                >
-                  {date <= 31 ? date : ''}
-                </div>
-              );
-            })}
           </div>
-          <div className="text-right text-xs text-gray-500 mt-2">
-            W23, W24, W25, W26
-          </div>
-        </div>
+        </Card>
+      </div>
 
-        {/* Today's Actions */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-900">Today's actions</h3>
-            <div className="bg-green-500 text-white px-3 py-1 rounded-full text-sm font-bold">
-              {dashboardStats.totalCallsAttended}
+      <div className="grid gap-6 xl:grid-cols-2">
+        <Card className="shadow-sm ring-1 ring-gray-100">
+          <div className="mb-5 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-950">Recent Activity</h3>
+              <p className="mt-1 text-sm text-gray-500">Latest audit log entries</p>
             </div>
+            <Clock3 className="h-5 w-5 text-gray-500" aria-hidden="true" />
           </div>
-          <p className="text-xs text-gray-500 mb-4">00 those to move bookings</p>
-          
-          <div className="text-center mb-4">
-            <div className="relative inline-flex items-center justify-center">
-              <div className="w-20 h-20 rounded-full border-8 border-green-400 flex items-center justify-center">
-                <div className="text-xl font-bold text-green-600">{dashboardStats.callsCompletedPercentage}%</div>
-              </div>
-            </div>
-            <div className="mt-2">
-              <div className="text-lg font-bold text-gray-900">{dashboardStats.callsCompletedPercentage}% calls</div>
-              <div className="text-xs text-gray-500">completed to the next step</div>
-              <div className="text-sm text-orange-600 font-medium">{dashboardStats.callsNeedReview} calls need review</div>
-            </div>
-          </div>
-
-          <div className="flex space-x-2 mb-4">
-            <button className="bg-green-500 text-white px-3 py-1 rounded text-xs">Successful Calls</button>
-            <button className="bg-gray-200 text-gray-700 px-3 py-1 rounded text-xs">Unsuccessful Calls</button>
-            <button className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs">Today</button>
-          </div>
-
-          <div className="space-y-2 text-xs">
-            <div className="flex justify-between items-center p-2 bg-gray-50 rounded">
-              <span className="text-orange-600">{dashboardStats.articles} articles</span>
-              <span className="text-red-600">{dashboardStats.criticalFails} critical fails</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Client Performance */}
-        <div>
-          <div className="flex justify-between items-center mb-3">
-            <span className="font-medium text-gray-900">Client Name</span>
-            <span className="font-medium text-gray-900">Avg. Scr</span>
-            <span className="font-medium text-gray-900">Pass %</span>
-          </div>
-          
-          {clientData.length > 0 ? clientData.map((client, index) => (
-            <div key={index} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
-              <div className="flex items-center space-x-2">
-                <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-medium">
-                  {client.name?.split(' ').map(n => n[0]).join('') || 'NA'}
-                </div>
+          <div className="space-y-3">
+            {stats.recentLogs.map((log) => (
+              <div key={getId(log)} className="flex items-start justify-between gap-4 border-b border-gray-100 pb-3 last:border-0 last:pb-0">
                 <div>
-                  <div className="font-medium text-gray-900 text-sm">{client.name || 'N/A'}</div>
-                  <div className="text-xs text-gray-500">{client.phone || 'N/A'}</div>
+                  <p className="font-medium capitalize text-gray-950">{normalizeText(log.actionType || log.action)}</p>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {log.actor?.email || log.user?.email || log.actorEmail || 'System'} on {log.targetType || log.entityType || 'workspace'}
+                  </p>
+                </div>
+                <p className="shrink-0 text-right text-xs text-gray-500">{formatDateTime(log.createdAt)}</p>
+              </div>
+            ))}
+            {stats.recentLogs.length === 0 && (
+              <div className="rounded-lg bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
+                No audit activity found yet
+              </div>
+            )}
+          </div>
+        </Card>
+
+        <Card className="shadow-sm ring-1 ring-gray-100">
+          <div className="mb-5 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-950">Recent User Logins</h3>
+              <p className="mt-1 text-sm text-gray-500">People who have signed in most recently</p>
+            </div>
+            <Users className="h-5 w-5 text-gray-500" aria-hidden="true" />
+          </div>
+          <div className="space-y-3">
+            {stats.recentActiveUsers.map((item) => (
+              <div key={getId(item)} className="flex items-center justify-between gap-4 border-b border-gray-100 pb-3 last:border-0 last:pb-0">
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-gray-950">{item.name || 'Unnamed user'}</p>
+                  <p className="truncate text-sm text-gray-500">{item.email}</p>
+                </div>
+                <div className="text-right">
+                  <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
+                    {item.role || 'USER'}
+                  </span>
+                  <p className="mt-1 text-xs text-gray-500">{formatDateTime(item.lastLoginAt)}</p>
                 </div>
               </div>
-              <div className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
-                {client.avgScore || 0} avg
+            ))}
+            {stats.recentActiveUsers.length === 0 && (
+              <div className="rounded-lg bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
+                No user login history available
               </div>
-              <div className="text-sm font-medium text-gray-900">
-                Pass {client.passRate || 0}%
-              </div>
-            </div>
-          )) : (
-            <div className="text-center py-4 text-gray-500">
-              <div className="text-lg mb-1">📊</div>
-              <p className="text-sm">No client data available</p>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        </Card>
       </div>
     </div>
   );
