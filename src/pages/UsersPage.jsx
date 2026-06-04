@@ -22,6 +22,8 @@ export function UsersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [editingUser, setEditingUser] = useState(null);
   const [formData, setFormData] = useState({ role: 'AGENT', status: 'ACTIVE', teamIds: [] });
+  const [filterForm, setFilterForm] = useState({ role: '', status: '', teamId: '' });
+  const [filters, setFilters] = useState({});
 
   const { user: currentUser } = useAuthStore();
   const navigate = useNavigate();
@@ -31,13 +33,13 @@ export function UsersPage() {
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [filters]);
 
   const fetchUsers = async () => {
     try {
       setIsLoading(true);
       const [usersData, teamsData] = await Promise.all([
-        userService.getUsers(),
+        userService.getUsers(filters),
         teamService.getTeams({ limit: 100 }),
       ]);
       setUsers(listFromResponse(usersData, 'users'));
@@ -112,10 +114,21 @@ export function UsersPage() {
   const getStatusBadgeColor = (status) => {
     const colors = {
       ACTIVE: 'bg-green-100 text-green-800',
-      INACTIVE: 'bg-gray-100 text-gray-800',
-      SUSPENDED: 'bg-red-100 text-red-800',
+      DISABLED: 'bg-red-100 text-red-800',
+      PENDING_VERIFICATION: 'bg-yellow-100 text-yellow-800',
+      EMAIL_VERIFIED: 'bg-blue-100 text-blue-800',
     };
     return colors[status] || 'bg-gray-100 text-gray-800';
+  };
+
+  const handleFilter = (event) => {
+    event.preventDefault();
+    setFilters(Object.fromEntries(Object.entries(filterForm).filter(([, value]) => value)));
+  };
+
+  const clearFilters = () => {
+    setFilterForm({ role: '', status: '', teamId: '' });
+    setFilters({});
   };
 
   if (isLoading) {
@@ -139,6 +152,51 @@ export function UsersPage() {
           </Button>
         )}
       </div>
+
+      <Card>
+        <form onSubmit={handleFilter} className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto_auto] md:items-end">
+          <label>
+            <span className="mb-1 block text-sm font-medium text-gray-700">Role</span>
+            <select
+              value={filterForm.role}
+              onChange={(event) => setFilterForm({ ...filterForm, role: event.target.value })}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2"
+            >
+              <option value="">All roles</option>
+              <option value="AGENT">Agent</option>
+              <option value="MANAGER">Manager</option>
+              <option value="ADMIN">Admin</option>
+            </select>
+          </label>
+          <label>
+            <span className="mb-1 block text-sm font-medium text-gray-700">Status</span>
+            <select
+              value={filterForm.status}
+              onChange={(event) => setFilterForm({ ...filterForm, status: event.target.value })}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2"
+            >
+              <option value="">All statuses</option>
+              <option value="ACTIVE">Active</option>
+              <option value="DISABLED">Disabled</option>
+            </select>
+          </label>
+          <label>
+            <span className="mb-1 block text-sm font-medium text-gray-700">Team</span>
+            <select
+              value={filterForm.teamId}
+              onChange={(event) => setFilterForm({ ...filterForm, teamId: event.target.value })}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2"
+            >
+              <option value="">All teams</option>
+              {teams.map((team) => (
+                <option key={team._id || team.id} value={team._id || team.id}>{team.name}</option>
+              ))}
+            </select>
+          </label>
+          <Button type="submit">Filter</Button>
+          <Button type="button" variant="ghost" onClick={clearFilters}>Clear</Button>
+        </form>
+      </Card>
 
       <Card padding={false}>
         <div className="overflow-x-auto">
@@ -218,7 +276,6 @@ export function UsersPage() {
               >
                 <option value="AGENT">Agent</option>
                 <option value="MANAGER">Manager</option>
-                <option value="ADMIN">Admin</option>
               </select>
             </div>
             <div>
@@ -229,8 +286,7 @@ export function UsersPage() {
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="ACTIVE">Active</option>
-                <option value="INACTIVE">Inactive</option>
-                <option value="SUSPENDED">Suspended</option>
+                <option value="DISABLED">Disabled</option>
               </select>
             </div>
           </div>

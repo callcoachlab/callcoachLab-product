@@ -17,13 +17,14 @@ const listFromResponse = (response) => {
 export function AuditLogsPage() {
   const [logs, setLogs] = useState([]);
   const [actionType, setActionType] = useState('');
+  const [appliedActionType, setAppliedActionType] = useState('');
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const toast = useToast();
 
   useEffect(() => {
     fetchLogs();
-  }, [page]);
+  }, [page, appliedActionType]);
 
   const fetchLogs = async () => {
     try {
@@ -31,7 +32,7 @@ export function AuditLogsPage() {
       const response = await auditLogService.getAuditLogs({
         page,
         limit: 50,
-        ...(actionType ? { actionType } : {}),
+        ...(appliedActionType ? { actionType: appliedActionType } : {}),
       });
       setLogs(listFromResponse(response));
     } catch (error) {
@@ -44,7 +45,7 @@ export function AuditLogsPage() {
   const handleFilter = (event) => {
     event.preventDefault();
     setPage(1);
-    fetchLogs();
+    setAppliedActionType(actionType.trim());
   };
 
   if (isLoading) {
@@ -72,7 +73,7 @@ export function AuditLogsPage() {
             fullWidth
           />
           <Button type="submit">Apply Filter</Button>
-          <Button type="button" variant="ghost" onClick={() => { setActionType(''); setPage(1); }}>
+          <Button type="button" variant="ghost" onClick={() => { setActionType(''); setAppliedActionType(''); setPage(1); }}>
             Clear
           </Button>
         </form>
@@ -121,7 +122,7 @@ export function AuditLogsPage() {
 
       <div className="flex justify-end gap-2">
         <Button variant="outline" disabled={page === 1} onClick={() => setPage(page - 1)}>Previous</Button>
-        <Button variant="outline" onClick={() => setPage(page + 1)}>Next</Button>
+        <Button variant="outline" disabled={logs.length < 50} onClick={() => setPage(page + 1)}>Next</Button>
       </div>
     </div>
   );

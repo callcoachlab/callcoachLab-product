@@ -1,7 +1,6 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../config/api';
 
-// Create axios instance
 const api = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true,
@@ -10,102 +9,119 @@ const api = axios.create({
   },
 });
 
-// CSRF token promise to ensure token is always fetched first
-let csrfTokenPromise = null;
+// CSRF is fetched on demand for API operations that require it, never on app load.
+localStorage.removeItem('csrfToken');
+
+let refreshPromise = null;
+let csrfPromise = null;
 
 const fetchCSRFToken = async () => {
-  try {
-    const response = await axios.get(`${API_BASE_URL}/csrf`, {
-      withCredentials: true,
-    });
-    const csrfToken = response.data.data.csrfToken;
-    localStorage.setItem('csrfToken', csrfToken);
-    return csrfToken;
-  } catch (error) {
-    console.error('Failed to fetch CSRF token:', error);
-    return null;
+  const response = await axios.get(`${API_BASE_URL}/csrf`, {
+    withCredentials: true,
+  });
+  const csrfToken = response.data.csrfToken || response.data.data?.csrfToken;
+
+  if (!csrfToken) {
+    throw new Error('CSRF token missing from /csrf response');
   }
+
+  return csrfToken;
 };
 
-// Initialize CSRF token on module load
-csrfTokenPromise = fetchCSRFToken();
+const getCSRFToken = async () => {
+  if (!csrfPromise) {
+    csrfPromise = fetchCSRFToken().finally(() => {
+      csrfPromise = null;
+    });
+  }
 
-// Request interceptor to add auth token and CSRF token
+  return csrfPromise;
+};
+
+const clearSession = () => {
+  localStorage.removeItem('accessToken');
+  localStorage.removeItem('setupToken');
+  localStorage.removeItem('csrfToken');
+  localStorage.removeItem('user');
+  localStorage.removeItem('workspace');
+};
+
+const refreshAccessToken = async () => {
+  const csrfToken = await getCSRFToken();
+  const response = await axios.post(
+    `${API_BASE_URL}/auth/refresh`,
+    {},
+    {
+      withCredentials: true,
+      headers: { 'X-CSRF-Token': csrfToken },
+    }
+  );
+  const accessToken = response.data.data.auth.accessToken;
+  localStorage.setItem('accessToken', accessToken);
+  return accessToken;
+};
+
 api.interceptors.request.use(
   async (config) => {
-    const token = localStorage.getItem('accessToken');
+    const token = config.authToken === 'setup'
+      ? localStorage.getItem('setupToken')
+      : localStorage.getItem('accessToken');
+
+    if (config.skipAuth) {
+      return config;
+    }
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    
-    // Add CSRF token for non-GET requests
-    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(config.method?.toUpperCase())) {
-      let csrfToken = localStorage.getItem('csrfToken');
-      
-      // If no token in storage, wait for the promise or fetch it
-      if (!csrfToken) {
-        if (csrfTokenPromise) {
-          csrfToken = await csrfTokenPromise;
-        } else {
-          csrfToken = await fetchCSRFToken();
-        }
-      }
-      
-      if (csrfToken) {
-        config.headers['X-CSRF-Token'] = csrfToken;
-      }
+
+    if (config.requiresCsrf) {
+      config.headers['X-CSRF-Token'] = await getCSRFToken();
     }
-    
+
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// Response interceptor to handle token refresh and CSRF errors
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
 
-    // If CSRF token missing/invalid, fetch new token and retry
     if (
       error.response?.status === 403 &&
-      error.response?.data?.error?.code === 'CSRF' &&
-      !originalRequest._csrfRetry
+      error.response?.data?.error?.code?.startsWith('CSRF') &&
+      originalRequest?.requiresCsrf &&
+      !originalRequest?._csrfRetry
     ) {
       originalRequest._csrfRetry = true;
-      csrfTokenPromise = fetchCSRFToken();
-      const newToken = await csrfTokenPromise;
-      if (newToken) {
-        originalRequest.headers['X-CSRF-Token'] = newToken;
-        return api(originalRequest);
-      }
+      originalRequest.headers['X-CSRF-Token'] = await getCSRFToken();
+      return api(originalRequest);
     }
 
-    // If 401 and not already retried, try to refresh token
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (
+      error.response?.status === 401 &&
+      !originalRequest?._retry &&
+      !originalRequest?.skipRefresh &&
+      localStorage.getItem('accessToken')
+    ) {
       originalRequest._retry = true;
 
       try {
-        const response = await axios.post(
-          `${API_BASE_URL}/auth/refresh`,
-          {},
-          { withCredentials: true }
-        );
-
-        const { accessToken } = response.data.data.auth;
-        localStorage.setItem('accessToken', accessToken);
-
-        // Retry original request with new token
+        if (!refreshPromise) {
+          refreshPromise = refreshAccessToken().finally(() => {
+            refreshPromise = null;
+          });
+        }
+        const accessToken = await refreshPromise;
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         return api(originalRequest);
       } catch (refreshError) {
-        // Refresh failed, clear auth and redirect to login
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('user');
-        window.location.href = '/login';
+        clearSession();
+        if (window.location.pathname !== '/login') {
+          window.location.replace('/login');
+        }
         return Promise.reject(refreshError);
       }
     }
@@ -115,4 +131,3 @@ api.interceptors.response.use(
 );
 
 export default api;
-export { fetchCSRFToken };

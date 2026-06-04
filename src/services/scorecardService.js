@@ -8,17 +8,17 @@ export const scorecardService = {
   },
 
   async createScorecard(data) {
-    const response = await api.post(API_ENDPOINTS.SCORECARDS, data);
+    const response = await api.post(API_ENDPOINTS.SCORECARDS, data, { requiresCsrf: true });
     return response.data.data;
   },
 
   async updateScorecard(scorecardId, data) {
-    const response = await api.patch(`${API_ENDPOINTS.SCORECARDS}/${scorecardId}`, data);
+    const response = await api.patch(`${API_ENDPOINTS.SCORECARDS}/${scorecardId}`, data, { requiresCsrf: true });
     return response.data.data;
   },
 
   async deleteScorecard(scorecardId) {
-    const response = await api.delete(`${API_ENDPOINTS.SCORECARDS}/${scorecardId}`);
+    const response = await api.delete(`${API_ENDPOINTS.SCORECARDS}/${scorecardId}`, { requiresCsrf: true });
     return response.data.data;
   },
 };

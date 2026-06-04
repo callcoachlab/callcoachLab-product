@@ -5,35 +5,47 @@ import { DashboardPage } from './pages/DashboardPage';
 import { TeamsPage } from './pages/TeamsPage';
 import { UsersPage } from './pages/UsersPage';
 import { SettingsPage } from './pages/SettingsPage';
-import { CreateScorecardPage } from './pages/ScoreCard';
-import { ProtectedRoute } from './components/ProtectedRoute';
 import { InvitesPage } from './pages/InvitesPage';
 import { AuditLogsPage } from './pages/AuditLogsPage';
 import { ScorecardsPage } from './pages/ScorecardsPage';
+import { VerifyEmailPage } from './pages/VerifyEmailPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
+import { AcceptInvitePage } from './pages/AcceptInvitePage';
 import { DashboardLayout } from './components/DashboardLayout';
+import { GuestRoute, ProtectedRoute } from './components/ProtectedRoute';
+import { useAuthStore } from './store/authStore';
 import { Toast } from './components/Toast';
 import './App.css';
 import CallCoach360Setup from './ui/Setup';
 
-function App() {
-  // Auth gating is temporarily disabled for now.
-  // const { isAuthenticated } = useAuthStore();
+function HomeRedirect() {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated) && Boolean(localStorage.getItem('accessToken'));
+  return <Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />;
+}
 
+function App() {
   return (
     <BrowserRouter>
       <Toast />
       <Routes>
-        {/* Public Routes */}
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/signup" element={<SignupPage />} />
+        <Route path="/" element={<HomeRedirect />} />
+
+        <Route element={<GuestRoute />}>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/accept-invite" element={<AcceptInvitePage />} />
+        </Route>
 
         <Route
           path='/setup'
           element={<CallCoach360Setup/>}
         />
 
-        {/* Protected Routes */}
-        {/* <Route element={<ProtectedRoute />}> */}
+        <Route element={<ProtectedRoute />}>
           <Route path="/dashboard" element={<DashboardLayout><DashboardPage /></DashboardLayout>} />
           <Route path="/teams" element={<DashboardLayout><TeamsPage /></DashboardLayout>} />
           <Route path="/users" element={<DashboardLayout><UsersPage /></DashboardLayout>} />
@@ -41,8 +53,7 @@ function App() {
           <Route path="/scorecards" element={<DashboardLayout><ScorecardsPage /></DashboardLayout>} />
           <Route path="/audit-logs" element={<DashboardLayout><AuditLogsPage /></DashboardLayout>} />
           <Route path="/settings" element={<DashboardLayout><SettingsPage /></DashboardLayout>} />
-          <Route path="/scorecards/new" element={<CreateScorecardPage />} />
-        {/* </Route> */}
+        </Route>
       </Routes>
     </BrowserRouter>
   );

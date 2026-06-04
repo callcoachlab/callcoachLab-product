@@ -8,17 +8,22 @@ export const inviteService = {
   },
 
   async createInvites(invites) {
-    const response = await api.post(API_ENDPOINTS.CREATE_INVITE, { invites });
+    const response = await api.post(API_ENDPOINTS.CREATE_INVITE, { invites }, { requiresCsrf: true });
+    return response.data.data;
+  },
+
+  async previewInvite(token) {
+    const response = await api.get(API_ENDPOINTS.PREVIEW_INVITE, { params: { token } });
     return response.data.data;
   },
 
   async resendInvite(inviteId) {
-    const response = await api.post(`${API_ENDPOINTS.RESEND_INVITE}/${inviteId}/resend`);
+    const response = await api.post(`${API_ENDPOINTS.RESEND_INVITE}/${inviteId}/resend`, {}, { requiresCsrf: true });
     return response.data.data;
   },
 
   async revokeInvite(inviteId) {
-    const response = await api.post(`${API_ENDPOINTS.REVOKE_INVITE}/${inviteId}/revoke`);
+    const response = await api.post(`${API_ENDPOINTS.REVOKE_INVITE}/${inviteId}/revoke`, {}, { requiresCsrf: true });
     return response.data.data;
   },
 };
