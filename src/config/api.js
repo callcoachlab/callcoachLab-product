@@ -1,4 +1,5 @@
-export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'https://thebotmate.com/m1').replace(/\/+$/, '');
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'https://thebotmate.com').replace(/\/+$/, '');
+export const INGESTION_BASE_URL = (import.meta.env.VITE_INGESTION_BASE_URL || 'https://thebotmate.com/m1').replace(/\/+$/, '');
 export const APP_NAME = import.meta.env.VITE_APP_NAME || 'CoachLab';
 
 export const API_ENDPOINTS = {

@@ -6,6 +6,9 @@ import { ErrorBoundary } from '../components/ErrorBoundary';
 
 const SINGLE_MODE = 'single';
 const BULK_MODE = 'bulk';
+const INGESTION_MODE_STORAGE_KEY = 'callcoach.ingestion.mode';
+const INGESTION_SINGLE_STORAGE_KEY = 'callcoach.ingestion.single';
+const INGESTION_BULK_STORAGE_KEY = 'callcoach.ingestion.bulk';
 
 const formatBytes = (bytes = 0) => {
   if (bytes === 0) return '0 B';
@@ -31,6 +34,7 @@ function UploadProgress({ progress, label }) {
 function SingleUploadCard() {
   const toast = useToast();
   const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFileMeta, setSelectedFileMeta] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -39,12 +43,42 @@ function SingleUploadCard() {
   const [error, setError] = useState('');
   const inputRef = useRef(null);
 
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(INGESTION_SINGLE_STORAGE_KEY) || 'null');
+      if (saved) {
+        setSelectedFileMeta(saved.selectedFileMeta || null);
+        setUploadProgress(saved.uploadProgress || 0);
+        setStatus(saved.status || 'idle');
+        setResult(saved.result || null);
+        setError(saved.error || '');
+      }
+    } catch {
+      // Ignore malformed storage data.
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(
+      INGESTION_SINGLE_STORAGE_KEY,
+      JSON.stringify({
+        selectedFileMeta,
+        uploadProgress,
+        status,
+        result,
+        error,
+      })
+    );
+  }, [selectedFileMeta, uploadProgress, status, result, error]);
+
   const reset = () => {
     setSelectedFile(null);
+    setSelectedFileMeta(null);
     setUploadProgress(0);
     setStatus('idle');
     setError('');
     setResult(null);
+    localStorage.removeItem(INGESTION_SINGLE_STORAGE_KEY);
   };
 
   const handleFile = (file) => {
@@ -54,6 +88,7 @@ function SingleUploadCard() {
       return;
     }
     setSelectedFile(file);
+    setSelectedFileMeta({ name: file.name, size: file.size });
     setError('');
     setStatus('ready');
   };
@@ -135,14 +170,14 @@ function SingleUploadCard() {
         <p className="mt-3 text-sm font-medium text-gray-700">Drop audio file here or click to browse</p>
       </div>
 
-      {selectedFile && (
+      {(selectedFile || selectedFileMeta) && (
         <div className="mt-4 rounded-xl bg-gray-50 p-3 text-sm text-gray-700">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <FileAudio className="h-4 w-4 text-green-600" />
-              <span className="font-medium">{selectedFile.name}</span>
+              <span className="font-medium">{selectedFile?.name || selectedFileMeta?.name}</span>
             </div>
-            <span className="text-xs text-gray-500">{formatBytes(selectedFile.size)}</span>
+            <span className="text-xs text-gray-500">{formatBytes(selectedFile?.size || selectedFileMeta?.size || 0)}</span>
           </div>
         </div>
       )}
@@ -182,6 +217,7 @@ function BulkUploadCard() {
   const toast = useToast();
   const [job, setJob] = useState(null);
   const [csvFile, setCsvFile] = useState(null);
+  const [csvFileName, setCsvFileName] = useState('');
   const [isCreatingJob, setIsCreatingJob] = useState(false);
   const [isUploadingCsv, setIsUploadingCsv] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
@@ -190,6 +226,36 @@ function BulkUploadCard() {
   const [warnings, setWarnings] = useState([]);
   const [error, setError] = useState('');
   const csvInputRef = useRef(null);
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(INGESTION_BULK_STORAGE_KEY) || 'null');
+      if (saved) {
+        setJob(saved.job || null);
+        setCsvFileName(saved.csvFileName || '');
+        setStatus(saved.status || 'idle');
+        setStats(saved.stats || null);
+        setWarnings(saved.warnings || []);
+        setError(saved.error || '');
+      }
+    } catch {
+      // Ignore malformed storage data.
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(
+      INGESTION_BULK_STORAGE_KEY,
+      JSON.stringify({
+        job,
+        csvFileName,
+        status,
+        stats,
+        warnings,
+        error,
+      })
+    );
+  }, [job, csvFileName, status, stats, warnings, error]);
 
   const refreshJob = useCallback(async (jobId) => {
     const data = await ingestionService.getBulkJob(jobId);
@@ -227,6 +293,7 @@ function BulkUploadCard() {
       setIsUploadingCsv(true);
       setError('');
       setCsvFile(file);
+      setCsvFileName(file.name);
       await ingestionService.uploadBulkCsv(job, file);
       await refreshJob(job);
       setStatus('csv-uploaded');
@@ -286,6 +353,12 @@ function BulkUploadCard() {
       {job && (
         <div className="mt-4 rounded-xl bg-gray-50 p-3 text-sm text-gray-700">
           <span className="font-medium">Job ID:</span> {job}
+        </div>
+      )}
+
+      {csvFileName && (
+        <div className="mt-3 rounded-xl bg-gray-50 p-3 text-sm text-gray-700">
+          <span className="font-medium">CSV:</span> {csvFileName}
         </div>
       )}
 
@@ -378,7 +451,18 @@ function BulkUploadCard() {
 }
 
 export function IngestionPage() {
-  const [mode, setMode] = useState(SINGLE_MODE);
+  const [mode, setMode] = useState(() => {
+    try {
+      const savedMode = localStorage.getItem(INGESTION_MODE_STORAGE_KEY);
+      return savedMode === BULK_MODE ? BULK_MODE : SINGLE_MODE;
+    } catch {
+      return SINGLE_MODE;
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem(INGESTION_MODE_STORAGE_KEY, mode);
+  }, [mode]);
 
   return (
     <ErrorBoundary>
