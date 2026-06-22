@@ -1,28 +1,4 @@
-import { create } from 'zustand';
-
-export const useToastStore = create((set) => ({
-  toasts: [],
-  
-  addToast: (toast) => {
-    const id = Date.now();
-    set((state) => ({
-      toasts: [...state.toasts, { ...toast, id }],
-    }));
-    
-    // Auto remove after 5 seconds
-    setTimeout(() => {
-      set((state) => ({
-        toasts: state.toasts.filter((t) => t.id !== id),
-      }));
-    }, 5000);
-  },
-  
-  removeToast: (id) => {
-    set((state) => ({
-      toasts: state.toasts.filter((t) => t.id !== id),
-    }));
-  },
-}));
+import { useToastStore } from '../store/toastStore';
 
 export function Toast() {
   const { toasts, removeToast } = useToastStore();
@@ -56,14 +32,3 @@ export function Toast() {
   );
 }
 
-// Hook to use toast
-export function useToast() {
-  const addToast = useToastStore((state) => state.addToast);
-  
-  return {
-    success: (message) => addToast({ type: 'success', message }),
-    error: (message) => addToast({ type: 'error', message }),
-    info: (message) => addToast({ type: 'info', message }),
-    warning: (message) => addToast({ type: 'warning', message }),
-  };
-}

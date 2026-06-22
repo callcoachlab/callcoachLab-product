@@ -471,13 +471,17 @@ function StepPublish({ wizardData, onBack, onPublish, isPublishing }) {
             { label: 'Title', value: title },
             { label: 'Call Type', value: callType },
             { label: 'Pass Threshold', value: passThreshold },
-            { label: 'Auto-scored', value: `${autoScored} / ${totalCriteria}` },
+            { label: 'Scoring Mode', value: scoringMode },
           ].map(item => (
             <div key={item.label}>
               <span className="text-gray-400 text-xs block mb-0.5">{item.label}</span>
               <span className="font-semibold text-gray-900">{item.value}</span>
             </div>
           ))}
+        </div>
+        <div className="mt-3 text-sm">
+          <span className="text-gray-400 text-xs block mb-0.5">Auto-scored</span>
+          <span className="font-semibold text-gray-900">{autoScored} / {totalCriteria}</span>
         </div>
       </div>
       <div className="flex justify-between pt-2 border-t border-gray-100">

@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
-import { useToast } from '../components/Toast';
+import { useToast } from '../hooks/useToast';
 import authImage from '../assets/auth.png';
 
 export function LoginPage() {
