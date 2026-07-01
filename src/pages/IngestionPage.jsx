@@ -17,6 +17,92 @@ const formatBytes = (bytes = 0) => {
   return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 };
 
+const getErrorMessage = (error) => {
+  if (typeof error === 'string') return error;
+  if (error?.response?.data?.error?.message) return error.response.data.error.message;
+  if (error?.response?.data?.message) return error.response.data.message;
+  if (typeof error?.response?.data?.error === 'string') return error.response.data.error;
+  if (typeof error?.message === 'string') return error.message;
+  return 'Something went wrong.';
+};
+
+const getWarningText = (warning) => {
+  if (typeof warning === 'string') return warning;
+  if (warning?.message) return warning.message;
+  if (warning?.reason) return warning.reason;
+  if (warning?.detail) return warning.detail;
+  if (warning && typeof warning === 'object') {
+    const sanitized = sanitizeForDisplay(warning);
+    if (typeof sanitized === 'string') return sanitized;
+    try {
+      return JSON.stringify(sanitized);
+    } catch {
+      return 'Warning details unavailable';
+    }
+  }
+  return 'Warning details unavailable';
+};
+
+const isLikelyDomOrReactObject = (value) => {
+  if (!value || typeof value !== 'object') return false;
+  if (typeof window !== 'undefined' && value instanceof window.Element) return true;
+  if (typeof window !== 'undefined' && value instanceof window.Node) return true;
+  if (value?.constructor?.name === 'FiberNode') return true;
+  if (value?.$$typeof) return true;
+  if (value?.tagName || value?.nodeType) return true;
+  return false;
+};
+
+const sanitizeForDisplay = (value, seen = new WeakSet()) => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+  if (value instanceof Date) return value.toISOString();
+  if (isLikelyDomOrReactObject(value)) return '[UI object]';
+
+  if (typeof value === 'object') {
+    if (seen.has(value)) return '[Circular]';
+    seen.add(value);
+
+    if (Array.isArray(value)) {
+      return value.map((item) => sanitizeForDisplay(item, seen));
+    }
+
+    const result = {};
+    for (const key of Object.keys(value)) {
+      const current = value[key];
+      if (isLikelyDomOrReactObject(current)) {
+        result[key] = '[UI object]';
+      } else if (typeof current === 'object' && current !== null) {
+        try {
+          result[key] = sanitizeForDisplay(current, seen);
+        } catch {
+          result[key] = '[unserializable]';
+        }
+      } else {
+        result[key] = current;
+      }
+    }
+    return result;
+  }
+
+  return String(value);
+};
+
+const safeSerialize = (value) => {
+  const sanitized = sanitizeForDisplay(value);
+  return JSON.stringify(sanitized);
+};
+
+const saveToStorage = (key, value) => {
+  try {
+    localStorage.setItem(key, safeSerialize(value));
+  } catch {
+    // Ignore storage write failures.
+  }
+};
+
 function UploadProgress({ progress, label }) {
   return (
     <div className="mt-3">
@@ -59,15 +145,15 @@ function SingleUploadCard() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(
+    saveToStorage(
       INGESTION_SINGLE_STORAGE_KEY,
-      JSON.stringify({
+      {
         selectedFileMeta,
         uploadProgress,
         status,
         result,
         error,
-      })
+      }
     );
   }, [selectedFileMeta, uploadProgress, status, result, error]);
 
@@ -102,7 +188,13 @@ function SingleUploadCard() {
       setStatus('uploading');
       setUploadProgress(0);
 
-      const init = await ingestionService.createSingleUpload();
+      const requiredPayload = {
+        externalCallId: `${selectedFile.name.replace(/\.[^/.]+$/, '')}-${Date.now()}`.replace(/\s+/g, '_'),
+        callDatetime: new Date().toISOString(),
+        consentRecorded: true,
+      };
+
+      const init = await ingestionService.createSingleUpload(requiredPayload);
       const callUploadId = init?.callUploadId || init?.data?.callUploadId;
       const uploadUrl = init?.uploadUrl || init?.data?.uploadUrl;
 
@@ -131,7 +223,7 @@ function SingleUploadCard() {
       setResult({ callUploadId, fileName: selectedFile.name, size: selectedFile.size });
       toast.success('Audio upload completed successfully.');
     } catch (e) {
-      const message = e?.response?.data?.error?.message || e?.message || 'Upload failed.';
+      const message = getErrorMessage(e) || 'Upload failed.';
       setError(message);
       setStatus('error');
       toast.error(message);
@@ -244,22 +336,24 @@ function BulkUploadCard() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(
+    saveToStorage(
       INGESTION_BULK_STORAGE_KEY,
-      JSON.stringify({
+      {
         job,
         csvFileName,
         status,
         stats,
         warnings,
         error,
-      })
+      }
     );
   }, [job, csvFileName, status, stats, warnings, error]);
 
   const refreshJob = useCallback(async (jobId) => {
     const data = await ingestionService.getBulkJob(jobId);
-    setJob(data);
+    const resolvedJobId = data?.jobId || data?.data?.jobId || jobId;
+
+    setJob(resolvedJobId || jobId);
     setStats({
       totalRows: data?.totalRows ?? data?.data?.totalRows ?? 0,
       okCount: data?.okCount ?? data?.data?.okCount ?? 0,
@@ -273,13 +367,28 @@ function BulkUploadCard() {
     try {
       setIsCreatingJob(true);
       setError('');
-      const data = await ingestionService.createBulkUpload({});
+
+      const filename = csvFileName || csvFile?.name;
+      if (!filename) {
+        const message = 'Please select a CSV file before creating the job.';
+        setError(message);
+        toast.error(message);
+        return;
+      }
+
+      const payload = {
+        csvFileName: filename,
+        fileName: filename,
+        filename,
+      };
+
+      const data = await ingestionService.createBulkUpload(payload);
       const nextJob = data?.jobId || data?.data?.jobId || data;
       setJob(nextJob);
       setStatus('job-created');
       toast.success('Bulk upload job created.');
     } catch (e) {
-      const message = e?.response?.data?.error?.message || e?.message || 'Could not create bulk job.';
+      const message = getErrorMessage(e) || 'Could not create bulk job.';
       setError(message);
       toast.error(message);
     } finally {
@@ -288,18 +397,24 @@ function BulkUploadCard() {
   };
 
   const uploadCsv = async (file) => {
-    if (!job) return;
+    if (!job || !file?.name) return;
     try {
       setIsUploadingCsv(true);
       setError('');
       setCsvFile(file);
       setCsvFileName(file.name);
+
       await ingestionService.uploadBulkCsv(job, file);
       await refreshJob(job);
       setStatus('csv-uploaded');
       toast.success('CSV uploaded successfully.');
+
+      const currentJob = typeof job === 'string' ? job : null;
+      if (currentJob) {
+        await commitJob(currentJob, file.name);
+      }
     } catch (e) {
-      const message = e?.response?.data?.error?.message || e?.message || 'CSV upload failed.';
+      const message = getErrorMessage(e) || 'CSV upload failed.';
       setError(message);
       toast.error(message);
     } finally {
@@ -307,19 +422,35 @@ function BulkUploadCard() {
     }
   };
 
-  const commitJob = async () => {
-    if (!job) return;
+  const commitJob = async (jobId = job, fileNameOverride = csvFileName || csvFile?.name) => {
+    if (!jobId) return;
+    const resolvedFileName = fileNameOverride || csvFileName || csvFile?.name || '';
+
+    if (!resolvedFileName) {
+      const message = 'CSV file name is missing. Please select the CSV again.';
+      setError(message);
+      toast.error(message);
+      return;
+    }
+
     try {
       setIsCommitting(true);
       setError('');
-      await ingestionService.commitBulkJob(job);
-      await refreshJob(job);
+
+      const metadata = {
+        csvFileName: resolvedFileName,
+        fileName: resolvedFileName,
+        filename: resolvedFileName,
+      };
+
+      await ingestionService.commitBulkJob(jobId, metadata);
+      await refreshJob(jobId);
       setStatus('committed');
       toast.success('Bulk upload committed.');
     } catch (e) {
-      const message = e?.response?.data?.error?.message || e?.message || 'Commit failed.';
-      setError(message);
-      toast.error(message);
+      const serverMessage = getErrorMessage(e) || 'Commit failed.';
+      setError(serverMessage);
+      toast.error(serverMessage);
     } finally {
       setIsCommitting(false);
     }
@@ -342,9 +473,9 @@ function BulkUploadCard() {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-semibold text-gray-900">Bulk upload</p>
-          <p className="text-xs text-gray-500">Create a job, upload a CSV, review warnings, and commit.</p>
+          <p className="text-xs text-gray-500">Select a CSV, create a job, upload it, review warnings, and commit.</p>
         </div>
-        <button onClick={createJob} disabled={isCreatingJob} className="inline-flex items-center gap-1 rounded-lg bg-green-600 px-3 py-2 text-xs font-semibold text-white disabled:bg-gray-300">
+        <button onClick={createJob} disabled={isCreatingJob || !csvFileName} className="inline-flex items-center gap-1 rounded-lg bg-green-600 px-3 py-2 text-xs font-semibold text-white disabled:bg-gray-300">
           {isCreatingJob ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
           {job ? 'New job' : 'Create job'}
         </button>
@@ -356,6 +487,32 @@ function BulkUploadCard() {
         </div>
       )}
 
+      <div className="mt-4 rounded-2xl border border-dashed border-gray-200 p-6 text-center">
+        <input
+          ref={csvInputRef}
+          type="file"
+          accept=".csv"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+              setCsvFile(file);
+              setCsvFileName(file.name);
+            }
+          }}
+        />
+        <FileSpreadsheet className="mx-auto h-10 w-10 text-gray-400" />
+        <p className="mt-2 text-sm font-medium text-gray-700">{csvFileName ? 'CSV selected' : 'Select CSV file'}</p>
+        <button
+          onClick={() => csvInputRef.current?.click()}
+          disabled={isUploadingCsv}
+          className="mt-3 inline-flex items-center rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:bg-gray-300"
+        >
+          {isUploadingCsv ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          {csvFileName ? 'Change CSV' : 'Select CSV'}
+        </button>
+      </div>
+
       {csvFileName && (
         <div className="mt-3 rounded-xl bg-gray-50 p-3 text-sm text-gray-700">
           <span className="font-medium">CSV:</span> {csvFileName}
@@ -363,23 +520,15 @@ function BulkUploadCard() {
       )}
 
       {job && (
-        <div className="mt-4 rounded-2xl border border-dashed border-gray-200 p-6 text-center">
-          <input
-            ref={csvInputRef}
-            type="file"
-            accept=".csv"
-            className="hidden"
-            onChange={(e) => uploadCsv(e.target.files?.[0])}
-          />
-          <FileSpreadsheet className="mx-auto h-10 w-10 text-gray-400" />
-          <p className="mt-2 text-sm font-medium text-gray-700">Upload CSV file</p>
+        <div className="mt-4 rounded-2xl border border-gray-200 p-6 text-center">
+          <p className="mt-2 text-sm font-medium text-gray-700">Upload selected CSV</p>
           <button
-            onClick={() => csvInputRef.current?.click()}
-            disabled={isUploadingCsv}
+            onClick={() => csvFile && uploadCsv(csvFile)}
+            disabled={isUploadingCsv || !csvFile}
             className="mt-3 inline-flex items-center rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:bg-gray-300"
           >
             {isUploadingCsv ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Select CSV
+            Upload CSV
           </button>
         </div>
       )}
@@ -420,7 +569,7 @@ function BulkUploadCard() {
                 {warnings.map((warning, idx) => (
                   <tr key={idx} className="border-t border-gray-100">
                     <td className="px-3 py-2">{warning.row ?? warning.index ?? idx + 1}</td>
-                    <td className="px-3 py-2">{warning.message ?? warning.reason ?? JSON.stringify(warning)}</td>
+                    <td className="px-3 py-2">{getWarningText(warning)}</td>
                   </tr>
                 ))}
               </tbody>
