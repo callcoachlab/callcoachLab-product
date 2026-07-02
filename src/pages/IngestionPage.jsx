@@ -313,6 +313,9 @@ function BulkUploadCard() {
   const [isCreatingJob, setIsCreatingJob] = useState(false);
   const [isUploadingCsv, setIsUploadingCsv] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  const [previewReady, setPreviewReady] = useState(false);
+  const [readyToCommit, setReadyToCommit] = useState(false);
   const [status, setStatus] = useState('idle');
   const [stats, setStats] = useState(null);
   const [warnings, setWarnings] = useState([]);
@@ -386,6 +389,8 @@ function BulkUploadCard() {
       const nextJob = data?.jobId || data?.data?.jobId || data;
       setJob(nextJob);
       setStatus('job-created');
+      setPreviewReady(false);
+      setReadyToCommit(false);
       toast.success('Bulk upload job created.');
     } catch (e) {
       const message = getErrorMessage(e) || 'Could not create bulk job.';
@@ -396,13 +401,50 @@ function BulkUploadCard() {
     }
   };
 
+  const previewJob = useCallback(async (jobId) => {
+    if (!jobId) return;
+    try {
+      setIsPreviewing(true);
+      setError('');
+
+      const data = await ingestionService.previewBulkJob(jobId);
+      const summary = data?.summary ?? data?.data?.summary ?? {};
+
+      setStats({
+        totalRows: summary.totalRows ?? 0,
+        okCount: summary.okRows ?? 0,
+        warningCount: summary.warningRows ?? 0,
+        errorCount: summary.errorRows ?? 0,
+      });
+      setWarnings(data?.warnings ?? data?.data?.warnings ?? []);
+      setReadyToCommit(Boolean(data?.readyToCommit ?? data?.data?.readyToCommit));
+      setPreviewReady(true);
+    } catch (e) {
+      const message = getErrorMessage(e) || 'Could not load preview.';
+      setError(message);
+      toast.error(message);
+      setPreviewReady(false);
+      setReadyToCommit(false);
+    } finally {
+      setIsPreviewing(false);
+    }
+  }, [toast]);
+
   const uploadCsv = async (file) => {
     if (!job || !file?.name) return;
+    if (status === 'csv-uploaded' || status === 'committed') {
+      const message = 'This job already has a CSV uploaded. Start a new job to upload a different file.';
+      setError(message);
+      toast.error(message);
+      return;
+    }
     try {
       setIsUploadingCsv(true);
       setError('');
       setCsvFile(file);
       setCsvFileName(file.name);
+      setPreviewReady(false);
+      setReadyToCommit(false);
 
       await ingestionService.uploadBulkCsv(job, file);
       await refreshJob(job);
@@ -411,7 +453,7 @@ function BulkUploadCard() {
 
       const currentJob = typeof job === 'string' ? job : null;
       if (currentJob) {
-        await commitJob(currentJob, file.name);
+        await previewJob(currentJob);
       }
     } catch (e) {
       const message = getErrorMessage(e) || 'CSV upload failed.';
@@ -424,6 +466,12 @@ function BulkUploadCard() {
 
   const commitJob = async (jobId = job, fileNameOverride = csvFileName || csvFile?.name) => {
     if (!jobId) return;
+    if (!previewReady) {
+      const message = 'Please review the preview before committing.';
+      setError(message);
+      toast.error(message);
+      return;
+    }
     const resolvedFileName = fileNameOverride || csvFileName || csvFile?.name || '';
 
     if (!resolvedFileName) {
@@ -524,12 +572,17 @@ function BulkUploadCard() {
           <p className="mt-2 text-sm font-medium text-gray-700">Upload selected CSV</p>
           <button
             onClick={() => csvFile && uploadCsv(csvFile)}
-            disabled={isUploadingCsv || !csvFile}
+            disabled={isUploadingCsv || !csvFile || status === 'csv-uploaded' || status === 'committed'}
             className="mt-3 inline-flex items-center rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:bg-gray-300"
           >
             {isUploadingCsv ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             Upload CSV
           </button>
+          {(status === 'csv-uploaded' || status === 'committed') && (
+            <p className="mt-2 text-xs text-gray-500">
+              CSV already uploaded for this job. Start a new job to upload a different file.
+            </p>
+          )}
         </div>
       )}
 
@@ -585,10 +638,17 @@ function BulkUploadCard() {
         </div>
       )}
 
+      {isPreviewing && (
+        <div className="mt-3 flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading cost estimate and preview…
+        </div>
+      )}
+
       {job && (
         <button
-          onClick={commitJob}
-          disabled={isCommitting || !stats || stats.errorCount > 0}
+          onClick={() => commitJob()}
+          disabled={isCommitting || isPreviewing || !previewReady || !readyToCommit}
           className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-gray-300"
         >
           {isCommitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}

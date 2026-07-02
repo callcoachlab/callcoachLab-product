@@ -88,6 +88,14 @@ export const ingestionService = {
     return unwrap(response);
   },
 
+  async previewBulkJob(jobId) {
+    const response = await api.get(
+      toIngestionUrl(`${API_ENDPOINTS.INGESTION_BULK}/${jobId}/preview`),
+      { withCredentials: true }
+    );
+    return unwrap(response);
+  },
+
   async commitBulkJob(jobId, payload = {}) {
     const normalizedPayload = {
       ...(payload || {}),
