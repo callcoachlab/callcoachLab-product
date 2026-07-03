@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { CircleAlert, CheckCircle, Languages, Loader2 } from 'lucide-react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { useToast } from '../components/Toast';
+import { useToast } from '../hooks/useToast';
 
 const industryOptions = [
   { value: 'dental', label: 'Dental' },

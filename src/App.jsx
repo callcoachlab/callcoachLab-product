@@ -8,6 +8,7 @@ import { SettingsPage } from './pages/SettingsPage';
 import { InvitesPage } from './pages/InvitesPage';
 import { AuditLogsPage } from './pages/AuditLogsPage';
 import { ScorecardsPage } from './pages/ScorecardsPage';
+import { IngestionPage } from './pages/IngestionPage';
 import { VerifyEmailPage } from './pages/VerifyEmailPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
@@ -51,6 +52,7 @@ function App() {
           <Route path="/users" element={<DashboardLayout><UsersPage /></DashboardLayout>} />
           <Route path="/invites" element={<DashboardLayout><InvitesPage /></DashboardLayout>} />
           <Route path="/scorecards" element={<DashboardLayout><ScorecardsPage /></DashboardLayout>} />
+          <Route path="/ingestion" element={<DashboardLayout><IngestionPage /></DashboardLayout>} />
           <Route path="/audit-logs" element={<DashboardLayout><AuditLogsPage /></DashboardLayout>} />
           <Route path="/settings" element={<DashboardLayout><SettingsPage /></DashboardLayout>} />
         </Route>
